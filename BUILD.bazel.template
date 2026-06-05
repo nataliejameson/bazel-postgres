@@ -1093,13 +1093,11 @@ LIBPORTS_BASE = [
 
 LIBPORTS_LINUX = [
     "src/port/getpeereid.c",
-    "src/port/thread.c",
-]
+] + glob(["src/port/thread.c"], allow_empty=True)
 
 LIBPORTS_MACOS = [
     "src/port/explicit_bzero.c",
-    "src/port/thread.c",
-]
+] + glob(["src/port/thread.c"], allow_empty=True)
 
 LIBPORTS_WINDOWS = [
     "src/port/getpeereid.c",
