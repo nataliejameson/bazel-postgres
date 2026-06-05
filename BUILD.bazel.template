@@ -1,15 +1,17 @@
 """PostgreSQL BUILD file."""
 
+# TODO: Fix selects to be OS + CPU, some linux things won't work on aarch64
+
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag")
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 
-PG_VERSION_NUM = "160002"
+PG_VERSION_NUM = "%{pg_version_num}"
 
-PG_MAJORVERSION_NUM = "16"
+PG_MAJORVERSION_NUM = "%{major}"
 
-PG_MINORVERSION_NUM = "2"
+PG_MINORVERSION_NUM = "%{minor}"
 
 write_file(
     name = "pg_config_ext",
