@@ -52,8 +52,8 @@ def _postgres_impl(module_ctx):
                     major = major,
                     minor = minor,
                     sha256 = sha256,
-                    build_template = tag._build_template,
-                    patches = tag._patches,
+                    build_template = tag.build_template,
+                    patches = tag.patches,
                 )
                 created_repos.append(name)
     return module_ctx.extension_metadata(reproducible = True, root_module_direct_deps = created_repos, root_module_direct_dev_deps = [])
@@ -67,9 +67,8 @@ postgres = module_extension(
             "major": attr.string(mandatory = True),
             "minor": attr.string(mandatory = True),
             "sha256": attr.string(),
-            "_build_template": attr.label(default = "//:BUILD.bazel.template"),
-            "_module_template": attr.label(default = "//:MODULE.bazel.template"),
-            "_patches": attr.label_list(default = ["//:postgres_chklocale.patch"]),
+            "build_template": attr.label(default = "//:BUILD.bazel.template"),
+            "patches": attr.label_list(default = ["//:postgres_chklocale.patch"]),
         }),
     },
 )

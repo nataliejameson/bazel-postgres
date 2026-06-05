@@ -1,4 +1,4 @@
-module(name = "postgres_discord")
+module(name = "postgres_bazel")
 
 bazel_dep(name = "rules_cc", version = "0.2.4")
 bazel_dep(name = "platforms", version = "1.0.0")

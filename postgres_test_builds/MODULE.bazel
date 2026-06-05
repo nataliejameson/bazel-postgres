@@ -1,0 +1,157 @@
+module(name = "postgres_test_builds")
+
+bazel_dep(name = "postgres_bazel")
+local_path_override(
+    module_name = "postgres_bazel",
+    path = "../postgres_bazel",
+)
+
+postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
+postgres.version(
+    major = "16",
+    minor = "2",
+)
+postgres.version(
+    major = "16",
+    minor = "3",
+)
+postgres.version(
+    major = "16",
+    minor = "4",
+)
+postgres.version(
+    major = "16",
+    minor = "5",
+)
+postgres.version(
+    major = "16",
+    minor = "6",
+)
+postgres.version(
+    major = "16",
+    minor = "7",
+)
+postgres.version(
+    major = "16",
+    minor = "8",
+)
+postgres.version(
+    major = "16",
+    minor = "9",
+)
+postgres.version(
+    major = "16",
+    minor = "10",
+)
+postgres.version(
+    major = "16",
+    minor = "11",
+)
+postgres.version(
+    major = "16",
+    minor = "12",
+)
+postgres.version(
+    major = "16",
+    minor = "13",
+)
+postgres.version(
+    major = "16",
+    minor = "14",
+)
+postgres.version(
+    major = "17",
+    minor = "0",
+)
+postgres.version(
+    major = "17",
+    minor = "1",
+)
+postgres.version(
+    major = "17",
+    minor = "2",
+)
+postgres.version(
+    major = "17",
+    minor = "3",
+)
+postgres.version(
+    major = "17",
+    minor = "4",
+)
+postgres.version(
+    major = "17",
+    minor = "5",
+)
+postgres.version(
+    major = "17",
+    minor = "6",
+)
+postgres.version(
+    major = "17",
+    minor = "7",
+)
+postgres.version(
+    major = "17",
+    minor = "8",
+)
+postgres.version(
+    major = "17",
+    minor = "9",
+)
+postgres.version(
+    major = "17",
+    minor = "10",
+)
+postgres.version(
+    major = "18",
+    minor = "0",
+)
+postgres.version(
+    major = "18",
+    minor = "1",
+)
+postgres.version(
+    major = "18",
+    minor = "2",
+)
+postgres.version(
+    major = "18",
+    minor = "3",
+)
+postgres.version(
+    major = "18",
+    minor = "4",
+)
+use_repo(
+    postgres,
+    "postgres_16_10",
+    "postgres_16_11",
+    "postgres_16_12",
+    "postgres_16_13",
+    "postgres_16_14",
+    "postgres_16_2",
+    "postgres_16_3",
+    "postgres_16_4",
+    "postgres_16_5",
+    "postgres_16_6",
+    "postgres_16_7",
+    "postgres_16_8",
+    "postgres_16_9",
+    "postgres_17_0",
+    "postgres_17_1",
+    "postgres_17_10",
+    "postgres_17_2",
+    "postgres_17_3",
+    "postgres_17_4",
+    "postgres_17_5",
+    "postgres_17_6",
+    "postgres_17_7",
+    "postgres_17_8",
+    "postgres_17_9",
+    "postgres_18_0",
+    "postgres_18_1",
+    "postgres_18_2",
+    "postgres_18_3",
+    "postgres_18_4",
+)
