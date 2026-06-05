@@ -11,8 +11,6 @@ if [ -z "${DOWNLOAD_DIR}" ]; then
 fi
 
 
-#for mm in 16.{2..14} 17.{0..10} 18.{0..4}; do { major=$(echo "$mm" | cut -d . -f 1); minor=$(echo "$mm" | cut -d . -f 2); SHA256=$(curl "https://ftp.postgresql.org/pub/source/v${mm}/postgresql-${mm}.tar.gz" | shasum -a 256); sed -i '' "s#\(major=\"${major}\", minor = \"${minor}\", sha256 = \"\).*\"#\\1${SHA256}\"#g" ../postgres-bazel/versions.bzl; } || break; done
-
 version() {
     major="$1"
     minor="$2"
