@@ -2,7 +2,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load(":versions.bzl", "VERSIONS")
 
 
-def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_template):
+def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_template, patches):
     # e.g. https://ftp.postgresql.org/pub/source/v16.3/postgresql-16.3.tar.gz
     url = "https://ftp.postgresql.org/pub/source/v{major}.{minor}/postgresql-{major}.{minor}.tar.gz".format(
         major = major,
@@ -22,6 +22,8 @@ def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_t
         urls = [url],
         sha256 = sha256,
         build_file_content = build_bazel,
+        patch_strip = 1,
+        patches = patches,
     )
 
 def _postgres_impl(module_ctx):
@@ -51,6 +53,7 @@ def _postgres_impl(module_ctx):
                     minor = minor,
                     sha256 = sha256,
                     build_template = tag._build_template,
+                    patches = tag._patches,
                 )
                 created_repos.append(name)
     return module_ctx.extension_metadata(reproducible = True, root_module_direct_deps = created_repos, root_module_direct_dev_deps = [])
@@ -66,6 +69,7 @@ postgres = module_extension(
             "sha256": attr.string(),
             "_build_template": attr.label(default = "//:BUILD.bazel.template"),
             "_module_template": attr.label(default = "//:MODULE.bazel.template"),
+            "_patches": attr.label_list(default = ["//:postgres_chklocale.patch"]),
         }),
     },
 )

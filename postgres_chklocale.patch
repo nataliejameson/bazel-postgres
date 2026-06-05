@@ -1,0 +1,16 @@
+diff --git a/src/port/chklocale.c b/src/port/chklocale.c
+index 023a743..f61678c 100644
+--- a/src/port/chklocale.c
++++ b/src/port/chklocale.c
+@@ -23,6 +23,11 @@
+ #include <langinfo.h>
+ #endif
+ 
++// https://www.postgresql.org/message-id/1026321.1765562828%40sss.pgh.pa.us
++#ifdef LOCALE_T_IN_XLOCALE
++#include <xlocale.h>
++#endif
++
+ #include "mb/pg_wchar.h"
+ 
+ 
