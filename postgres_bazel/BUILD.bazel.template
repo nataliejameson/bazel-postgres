@@ -800,7 +800,7 @@ write_file(
 
 /* PostgreSQL major version as a string */
 """] + [
-        "#define PG_MAJORVERSION_NUM \"{}\"".format(PG_MAJORVERSION_NUM),
+        "#define PG_MAJORVERSION \"{}\"".format(PG_MAJORVERSION_NUM),
     ] + ["""
 
 /* PostgreSQL major version number */
@@ -947,6 +947,7 @@ write_file(
 /* Define to 1 to use Intel SSE 4.2 CRC instructions with a runtime check. */
 """] + select({
         "@platforms//os:macos": ["/* #undef USE_SSE42_CRC32C_WITH_RUNTIME_CHECK */"],
+        #"@platforms//cpu:aarch64": ["/* #undef USE_SSE42_CRC32C_WITH_RUNTIME_CHECK */"],
         "//conditions:default": ["#define USE_SSE42_CRC32C_WITH_RUNTIME_CHECK 1"],
     }) + ["""
 
