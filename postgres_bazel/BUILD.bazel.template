@@ -734,6 +734,7 @@ write_file(
 /* Define to 1 if you have __get_cpuid. */
 """] + select({
         "@platforms//os:macos": ["/* #undef HAVE__GET_CPUID */"],
+	"@platforms//cpu:aarch64": ["/* #undef HAVE__GET_CPUID */"],
         "//conditions:default": ["#define HAVE__GET_CPUID 1"],
     }) + ["""
 
