@@ -8,6 +8,7 @@ PostgresVersion = provider(
 )
 
 VERSIONS = {
+
     "16": {
         "2": PostgresVersion(pg_version_num = "160002", major = "16", minor = "2", sha256 = "2b8201047ec81acd1bad29dba278d788e7891b9c3e8232eda16bb29dec8131c7"),
         "3": PostgresVersion(pg_version_num = "160003", major = "16", minor = "3", sha256 = "bd3798c399bc1b6d08b94340f9dd7a75a30a7fa076788ef2f4848be2be6a5fc5"),

@@ -36,7 +36,7 @@ download_version() {
     fi
     SHA256=$(shasum -a 256 "$DEST_PATH" | awk {'print $1'})
     pg_version_num=$(printf '%02d00%02d' "$major" "$minor")
-    echo "        \"${minor}\": PostgresVersion(pg_version_num =\"${pg_version_num}\", major =\"${major}\", minor = \"${minor}\", sha256 = \"${SHA256}\"),"
+    echo "        \"${minor}\": PostgresVersion(pg_version_num = \"${pg_version_num}\", major = \"${major}\", minor = \"${minor}\", sha256 = \"${SHA256}\"),"
 }
 
 write_versions() {
@@ -49,7 +49,7 @@ write_versions() {
 }
 
 write_versions_bzl() {
-    versions_bzl="${SCRIPTS_DIR}/../versions.bzl"
+    versions_bzl="${SCRIPTS_DIR}/../postgres_bazel/versions.bzl"
     cat > "$versions_bzl" <<EOF
 PostgresVersion = provider(
     fields = [
