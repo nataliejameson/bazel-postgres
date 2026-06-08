@@ -73,7 +73,8 @@ EOF
 
 test_build_line() {
     echo "alias(name = \"postgres_${1}_${2}_pq\", actual = \"@postgres_${1}_${2}//:libpq\")"
-    echo "alias(name = \"postgres_${1}_${2}_postgres\", actual = \"@postgres_${1}_${2}//:postgres\")"
+    # Commented out until we have postgres bins building properly
+    #echo "alias(name = \"postgres_${1}_${2}_postgres\", actual = \"@postgres_${1}_${2}//:postgres\")"
 }
 
 write_test_project_build_bazel() {
