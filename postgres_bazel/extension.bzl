@@ -2,7 +2,7 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load(":versions.bzl", "VERSIONS")
 
 
-def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_template, patches):
+def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_template, config_templates, patches):
     # e.g. https://ftp.postgresql.org/pub/source/v16.3/postgresql-16.3.tar.gz
     url = "https://ftp.postgresql.org/pub/source/v{major}.{minor}/postgresql-{major}.{minor}.tar.gz".format(
         major = major,
@@ -10,11 +10,11 @@ def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_t
     )
     build_tpl = module_ctx.read(build_template)
     build_bazel = build_tpl.replace(
-        '%{pg_version_num}', pg_version_num
+        '%%{repo_pg_version_num}', pg_version_num
     ).replace(
-        '%{major}', major
+        '%%{repo_major}', major
     ).replace(
-        '%{minor}', minor
+        '%%{repo_minor}', minor
     )
     http_archive(
         name = name,
@@ -24,7 +24,9 @@ def _create_repo(module_ctx, name, pg_version_num, major, minor, sha256, build_t
         build_file_content = build_bazel,
         patch_strip = 1,
         patches = patches,
+        files = config_templates,
     )
+
 
 def _postgres_impl(module_ctx):
     created_repos = []
@@ -53,6 +55,7 @@ def _postgres_impl(module_ctx):
                     minor = minor,
                     sha256 = sha256,
                     build_template = tag.build_template,
+                    config_templates = tag.config_templates,
                     patches = tag.patches,
                 )
                 created_repos.append(name)
@@ -68,6 +71,13 @@ postgres = module_extension(
             "minor": attr.string(mandatory = True),
             "sha256": attr.string(),
             "build_template": attr.label(default = "//:BUILD.bazel.template"),
+            "config_templates": attr.string_keyed_label_dict(default ={
+                "templates/default/macos-aarch64/pg_config.h": "//:templates/default/macos-aarch64/pg_config.h",
+                "templates/default/linux-x86_64/pg_config.h": "//:templates/default/linux-x86_64/pg_config.h",
+                "templates/default/linux-aarch64/pg_config.h": "//:templates/default/linux-aarch64/pg_config.h",
+                "templates/default/common/pg_config_ext.h": "//:templates/default/common/pg_config_ext.h",
+                "templates/default/common/pg_config_paths.h": "//:templates/default/common/pg_config_paths.h",
+            }),
             "patches": attr.label_list(default = ["//:postgres_chklocale.patch"]),
         }),
     },
