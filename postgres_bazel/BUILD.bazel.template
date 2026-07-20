@@ -323,8 +323,69 @@ cc_library(
     deps = [":pq_ssl_lib"],
 )
 
+cc_library(
+    name = "common",
+    srcs = [
+        "src/common/archive.c",
+"src/common/config_info.c",
+"src/common/exec.c",
+"src/common/file_utils.c",
+    ],
+    implementation_deps = [":include", ":backend"],
+    deps = [":libpq"],
+)
+
+cc_library(
+    name = "backend",
+    srcs = glob(["src/backend/utils/error/*.c"]),
+    implementation_deps = [":include"],
+    includes = [
+    "src/backend",
+    ],
+)
+
 alias(
     name = "libpq",
     actual = ":pq",
     visibility = ["//visibility:public"],
 )
+
+#initdb
+#pg_amcheck
+#pg_archivecleanup
+#pg_basebackup
+#pg_checksums
+#pg_config
+#pg_controldata
+#pg_ctl
+#pg_dump
+#pg_resetwal
+#pg_rewind
+#pg_test_fsync
+#pg_test_timing
+#pg_upgrade
+#pg_verifybackup
+#pg_waldump
+#pgbench
+#pgevent
+#psql
+
+cc_library(
+    name = "pgtime",
+    srcs = glob(["src/timezone/*.c", "src/timezone/*.h"]),
+    # TODO: tzdata
+    includes = [
+        "src/timezone",
+        "src/backend",
+    ],
+    deps = [":pq"],
+    implementation_deps = [":include"],
+)
+
+cc_binary(
+    name = "initdb",
+    srcs = glob(["src/bin/initdb/**/*.c"]),
+    deps = [":pq", ":pgtime", ":include", ":common", ":backend"],
+    includes = ["src/interfaces/libpq"],
+)
+
