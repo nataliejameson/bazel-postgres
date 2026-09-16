@@ -12,6 +12,7 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
 load("@rules_cc_autoconf//autoconf:autoconf_hdr.bzl", "autoconf_hdr")
@@ -1486,4 +1487,157 @@ alias(
     name = "libpq",
     actual = ":pq",
     visibility = ["//visibility:public"],
+)
+
+# ---------------------------------------------------------------------------
+# Frontend tools.
+#
+# Everything below is local to this repo; the upstream BCR overlay stops at
+# libpq. `:pgcommon` above is deliberately trimmed to the subset libpq needs,
+# so the tools get their own fuller `:pgcommon_tools` rather than widening it
+# and pulling extra objects into libpq.
+# ---------------------------------------------------------------------------
+
+# Upstream's `common_sources` (src/common/meson.build) plus the four files
+# meson adds for the static frontend variant only: restricted_token.c and
+# sprompt.c, then fe_memutils.c and logging.c, which are kept out of shared
+# libraries so libpq never exit()s on OOM or writes errors itself.
+_LIBCOMMON_TOOLS = [
+    "src/common/archive.c",
+    "src/common/base64.c",
+    "src/common/binaryheap.c",
+    "src/common/blkreftable.c",
+    "src/common/checksum_helper.c",
+    "src/common/compression.c",
+    "src/common/controldata_utils.c",
+    "src/common/d2s.c",
+    "src/common/encnames.c",
+    "src/common/exec.c",
+    "src/common/f2s.c",
+    "src/common/fe_memutils.c",
+    "src/common/file_perm.c",
+    "src/common/file_utils.c",
+    "src/common/hashfn.c",
+    "src/common/ip.c",
+    "src/common/jsonapi.c",
+    "src/common/keywords.c",
+    "src/common/kwlookup.c",
+    "src/common/link-canary.c",
+    "src/common/logging.c",
+    "src/common/md5_common.c",
+    "src/common/parse_manifest.c",
+    "src/common/percentrepl.c",
+    "src/common/pg_get_line.c",
+    "src/common/pg_lzcompress.c",
+    "src/common/pg_prng.c",
+    "src/common/pgfnames.c",
+    "src/common/psprintf.c",
+    "src/common/relpath.c",
+    "src/common/restricted_token.c",
+    "src/common/rmtree.c",
+    "src/common/saslprep.c",
+    "src/common/scram-common.c",
+    "src/common/sprompt.c",
+    "src/common/string.c",
+    "src/common/stringinfo.c",
+    "src/common/unicode_case.c",
+    "src/common/unicode_category.c",
+    "src/common/unicode_norm.c",
+    "src/common/username.c",
+    "src/common/wait_error.c",
+    "src/common/wchar.c",
+]
+
+cc_library(
+    name = "pgcommon_tools",
+    srcs = _LIBCOMMON_TOOLS + select({
+        ":ssl_none": [
+            "src/common/cryptohash.c",
+            "src/common/hmac.c",
+        ],
+        "//conditions:default": [
+            "src/common/cryptohash_openssl.c",
+            "src/common/hmac_openssl.c",
+        ],
+    }),
+    hdrs = ["src/common/kwlist_d.h"],
+    includes = ["src/interfaces/libpq"],
+    local_defines = [
+        "FRONTEND",
+        "JSONAPI_USE_PQEXPBUFFER",
+    ] + select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":include",
+        ":pgport",
+        ":ssl_backend",
+    ],
+)
+
+cc_library(
+    name = "pgfeutils",
+    srcs = [
+        "src/fe_utils/archive.c",
+        "src/fe_utils/astreamer_file.c",
+        "src/fe_utils/astreamer_tar.c",
+        "src/fe_utils/cancel.c",
+        "src/fe_utils/conditional.c",
+        "src/fe_utils/connect_utils.c",
+        "src/fe_utils/mbprint.c",
+        "src/fe_utils/option_utils.c",
+        "src/fe_utils/parallel_slot.c",
+        "src/fe_utils/print.c",
+        "src/fe_utils/psqlscan.c",
+        "src/fe_utils/query_utils.c",
+        "src/fe_utils/recovery_gen.c",
+        "src/fe_utils/simple_list.c",
+        "src/fe_utils/string_utils.c",
+    ],
+    local_defines = ["FRONTEND"] + select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":include",
+        ":pgcommon_tools",
+        ":pgport",
+        ":pq",
+    ],
+)
+
+cc_binary(
+    name = "psql",
+    srcs = [
+        "src/bin/psql/command.c",
+        "src/bin/psql/common.c",
+        "src/bin/psql/copy.c",
+        "src/bin/psql/crosstabview.c",
+        "src/bin/psql/describe.c",
+        "src/bin/psql/help.c",
+        "src/bin/psql/input.c",
+        "src/bin/psql/large_obj.c",
+        "src/bin/psql/mainloop.c",
+        "src/bin/psql/prompt.c",
+        "src/bin/psql/psqlscanslash.c",
+        "src/bin/psql/sql_help.c",
+        "src/bin/psql/startup.c",
+        "src/bin/psql/stringutils.c",
+        "src/bin/psql/tab-complete.c",
+        "src/bin/psql/variables.c",
+    ] + glob(["src/bin/psql/*.h"]),
+    includes = ["src/bin/psql"],
+    local_defines = ["FRONTEND"] + select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":include",
+        ":pgcommon_tools",
+        ":pgfeutils",
+        ":pgport",
+        ":pq",
+    ],
 )

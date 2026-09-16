@@ -52,6 +52,10 @@ cp src/backend/utils/fmgroids.h src/backend/utils/fmgrprotos.h src/include/utils
 record src/include/utils/fmgroids.h src/include/utils/fmgrprotos.h \
        src/backend/utils/fmgroids.h src/backend/utils/fmgrprotos.h src/backend/utils/fmgrtab.c
 
+echo >&2 "  gen_keywordlist.pl"
+perl src/tools/gen_keywordlist.pl --extern --output src/common src/include/parser/kwlist.h
+record src/common/kwlist_d.h
+
 echo >&2 "  generate-errcodes.pl"
 perl src/backend/utils/generate-errcodes.pl \
     --outfile src/include/utils/errcodes.h src/backend/utils/errcodes.txt
