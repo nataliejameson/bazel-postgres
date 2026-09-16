@@ -1,4 +1,0 @@
-exports_files([
-    "BUILD.bazel.template",
-    "postgres_chklocale.patch",
-])

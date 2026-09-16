@@ -1,7 +1,0 @@
-module(name = "postgres_bazel")
-
-bazel_dep(name = "rules_cc", version = "0.2.4")
-bazel_dep(name = "platforms", version = "1.0.0")
-bazel_dep(name = "bazel_skylib", version = "1.9.0")
-bazel_dep(name = "boringssl", version = "0.20241024.0")
-bazel_dep(name = "openssl", version = "3.3.1.bcr.6")
