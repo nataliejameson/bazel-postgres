@@ -103,13 +103,26 @@ perl src/bin/psql/gen_tabcomplete.pl \
     --outfile src/bin/psql/tab-complete.c src/bin/psql/tab-complete.in.c
 record src/bin/psql/sql_help.c src/bin/psql/sql_help.h src/bin/psql/tab-complete.c
 
+# plpgsql is a loadable module, but initdb's bootstrap does CREATE EXTENSION
+# plpgsql, so the server can't finish initialising without it.
+echo >&2 "  plpgsql keyword lists"
+perl src/tools/gen_keywordlist.pl --varname ReservedPLKeywords --output src/pl/plpgsql/src \
+    src/pl/plpgsql/src/pl_reserved_kwlist.h
+perl src/tools/gen_keywordlist.pl --varname UnreservedPLKeywords --output src/pl/plpgsql/src \
+    src/pl/plpgsql/src/pl_unreserved_kwlist.h
+perl src/pl/plpgsql/src/generate-plerrcodes.pl src/backend/utils/errcodes.txt \
+    > src/pl/plpgsql/src/plerrcodes.h
+record src/pl/plpgsql/src/pl_reserved_kwlist_d.h src/pl/plpgsql/src/pl_unreserved_kwlist_d.h \
+       src/pl/plpgsql/src/plerrcodes.h
+
 # bison: every grammar takes -d so the matching .h is emitted next to the .c.
 echo >&2 "  bison"
 for y in src/backend/parser/gram \
          src/backend/bootstrap/bootparse \
          src/backend/replication/repl_gram \
          src/backend/replication/syncrep_gram \
-         src/backend/utils/adt/jsonpath_gram; do
+         src/backend/utils/adt/jsonpath_gram \
+         src/pl/plpgsql/src/pl_gram; do
     bison -d -o "${y}.c" "${y}.y"
     record "${y}.c" "${y}.h"
 done

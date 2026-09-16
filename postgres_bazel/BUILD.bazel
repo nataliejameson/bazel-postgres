@@ -12,6 +12,8 @@ load("@bazel_skylib//lib:selects.bzl", "selects")
 load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
 load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 load("@bazel_skylib//rules:write_file.bzl", "write_file")
+load("@rules_shell//shell:sh_test.bzl", "sh_test")
+load("//:dist.bzl", "directory_output")
 load("@rules_cc//cc:cc_binary.bzl", "cc_binary")
 load("@rules_cc//cc:cc_library.bzl", "cc_library")
 load("@rules_cc_autoconf//autoconf:autoconf.bzl", "autoconf")
@@ -1576,6 +1578,8 @@ cc_library(
     deps = [
         ":include",
         ":pgport",
+        # controldata_utils.c computes the control-file CRC.
+        ":pgport_crc32c",
         ":ssl_backend",
     ],
 )
@@ -1864,4 +1868,187 @@ cc_binary(
         ":pgport_srv",
         ":pgtime",
     ],
+)
+
+# ---------------------------------------------------------------------------
+# initdb, pg_ctl, and the runtime tree they need.
+# ---------------------------------------------------------------------------
+
+cc_binary(
+    name = "initdb",
+    srcs = [
+        "src/bin/initdb/findtimezone.c",
+        "src/bin/initdb/initdb.c",
+        # Upstream symlinks this in from src/timezone rather than linking
+        # pgtime, so initdb gets the frontend build of it.
+        "src/timezone/localtime.c",
+    ] + glob(["src/timezone/*.h"]),
+    includes = ["src/timezone"],
+    local_defines = ["FRONTEND"] + select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":include",
+        ":pgcommon_tools",
+        ":pgfeutils",
+        ":pgport",
+        ":pq",
+    ],
+)
+
+cc_binary(
+    name = "pg_ctl",
+    srcs = ["src/bin/pg_ctl/pg_ctl.c"],
+    local_defines = ["FRONTEND"] + select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":include",
+        ":pgcommon_tools",
+        ":pgfeutils",
+        ":pgport",
+        ":pq",
+    ],
+)
+
+# zic compiles the timezone database into the TZif files the server and initdb
+# read at runtime. It's a build-time tool, so it's always built for the exec
+# platform.
+cc_binary(
+    name = "zic",
+    srcs = ["src/timezone/zic.c"] + glob(["src/timezone/*.h"]),
+    includes = ["src/timezone"],
+    local_defines = ["FRONTEND"],
+    deps = [
+        ":include",
+        ":pgport",
+    ],
+)
+
+directory_output(
+    name = "tzdata",
+    cmd = "$(execpath :zic) -d {out} $(execpath src/timezone/data/tzdata.zi)",
+    dirname = "timezone",
+    srcs = ["src/timezone/data/tzdata.zi"],
+    tools = [":zic"],
+)
+
+# The ten files initdb reads out of PGSHAREDIR, plus the abbreviation sets the
+# server reads for the timezone_abbreviations GUC.
+_SHARE_FILES = [
+    "src/include/catalog/postgres.bki",
+    "src/include/catalog/system_constraints.sql",
+    "src/backend/catalog/system_functions.sql",
+    "src/backend/catalog/system_views.sql",
+    "src/backend/catalog/information_schema.sql",
+    "src/backend/catalog/sql_features.txt",
+    "src/backend/snowball/snowball_create.sql",
+    "src/backend/libpq/pg_hba.conf.sample",
+    "src/backend/libpq/pg_ident.conf.sample",
+    "src/backend/utils/misc/postgresql.conf.sample",
+]
+
+# dict_snowball is a loadable module, not part of the server binary, but
+# initdb needs it: snowball_create.sql creates the stemming dictionaries and
+# fails the whole bootstrap if $libdir/dict_snowball can't be opened. Server
+# symbols stay unresolved until the backend dlopen()s it.
+cc_binary(
+    name = "dict_snowball",
+    srcs = glob(["src/backend/snowball/libstemmer/*.c"]) + [
+        "src/backend/snowball/dict_snowball.c",
+    ],
+    includes = ["src/include/snowball"],
+    linkopts = select({
+        "@platforms//os:macos": ["-Wl,-undefined,dynamic_lookup"],
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    deps = [":include"],
+)
+
+cc_binary(
+    name = "plpgsql",
+    srcs = [
+        "src/pl/plpgsql/src/pl_comp.c",
+        "src/pl/plpgsql/src/pl_exec.c",
+        "src/pl/plpgsql/src/pl_funcs.c",
+        "src/pl/plpgsql/src/pl_gram.c",
+        "src/pl/plpgsql/src/pl_handler.c",
+        "src/pl/plpgsql/src/pl_scanner.c",
+    ] + glob(["src/pl/plpgsql/src/*.h"]),
+    includes = ["src/pl/plpgsql/src"],
+    linkopts = select({
+        "@platforms//os:macos": ["-Wl,-undefined,dynamic_lookup"],
+        "//conditions:default": [],
+    }),
+    linkshared = True,
+    deps = [":include"],
+)
+
+# Bazel names a linkshared cc_binary libfoo.so even on macOS; postgres looks
+# for the platform DLSUFFIX (.dylib there), so rename on the way in.
+directory_output(
+    name = "pg_lib",
+    cmd = select({
+        "@platforms//os:macos": "S=.dylib",
+        "//conditions:default": "S=.so",
+    }) + """
+set -e
+mkdir -p {out}
+cp $(execpath :dict_snowball) {out}/dict_snowball$S
+cp $(execpath :plpgsql) {out}/plpgsql$S
+""",
+    dirname = "lib",
+    srcs = [
+        ":dict_snowball",
+        ":plpgsql",
+    ],
+)
+
+# Assembles bin/ and share/ as siblings. This layout is not cosmetic:
+# get_share_path() derives PGSHAREDIR by walking up from the running
+# executable, and only does so when the binary's directory is named "bin".
+# Anywhere else it falls back to the compiled-in /usr/local/pgsql/share.
+directory_output(
+    name = "pg_dist",
+    cmd = """
+set -e
+mkdir -p {out}/bin {out}/share/timezonesets {out}/share/extension {out}/lib
+cp $(execpath :initdb) $(execpath :pg_ctl) $(execpath :postgres) $(execpath :psql) {out}/bin/
+for f in SHARE_FILES; do cp "$f" {out}/share/; done
+for f in $(execpaths //:tznames); do cp "$f" {out}/share/timezonesets/; done
+cp -R $(execpath :tzdata) {out}/share/timezone
+cp -R $(execpath :pg_lib)/. {out}/lib/
+cp $(execpath src/pl/plpgsql/src/plpgsql.control) \
+   $(execpath src/pl/plpgsql/src/plpgsql--1.0.sql) {out}/share/extension/
+""".replace("SHARE_FILES", " ".join(["$(execpath %s)" % f for f in _SHARE_FILES])),
+    dirname = "dist",
+    srcs = _SHARE_FILES + [
+        ":initdb",
+        ":pg_ctl",
+        ":postgres",
+        ":pg_lib",
+        ":psql",
+        "src/pl/plpgsql/src/plpgsql--1.0.sql",
+        "src/pl/plpgsql/src/plpgsql.control",
+        ":tzdata",
+        "//:tznames",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+filegroup(
+    name = "tznames",
+    srcs = glob(["src/timezone/tznames/*"]),
+)
+
+sh_test(
+    name = "smoke_test",
+    size = "large",
+    srcs = ["smoke_test.sh"],
+    data = [":pg_dist"],
 )
