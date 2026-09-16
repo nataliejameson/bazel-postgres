@@ -65,8 +65,16 @@ echo >&2 "  generate-wait_event_types.pl"
 perl src/backend/utils/activity/generate-wait_event_types.pl \
     --outdir src/backend/utils/activity --code \
     src/backend/utils/activity/wait_event_names.txt >/dev/null
-cp src/backend/utils/activity/wait_event_types.h src/include/utils/wait_event_types.h
-record src/include/utils/wait_event_types.h src/backend/utils/activity/wait_event_types.h \
+# wait_event_types.h, and the two .c files that wait_event.c and
+# wait_event_funcs.c #include as "utils/...", all belong under src/include.
+cp src/backend/utils/activity/wait_event_types.h \
+   src/backend/utils/activity/pgstat_wait_event.c \
+   src/backend/utils/activity/wait_event_funcs_data.c \
+   src/include/utils/
+record src/include/utils/wait_event_types.h \
+       src/include/utils/pgstat_wait_event.c \
+       src/include/utils/wait_event_funcs_data.c \
+       src/backend/utils/activity/wait_event_types.h \
        src/backend/utils/activity/pgstat_wait_event.c \
        src/backend/utils/activity/wait_event_funcs_data.c
 

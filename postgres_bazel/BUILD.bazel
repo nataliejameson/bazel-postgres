@@ -1025,6 +1025,10 @@ cc_library(
         ":pg_config_paths_h",
     ] + glob([
         "src/include/**/*.h",
+        # Generated wait-event tables, #included as "utils/..." by
+        # wait_event.c and wait_event_funcs.c.
+        "src/include/utils/*_wait_event.c",
+        "src/include/utils/wait_event_funcs_data.c",
         "src/common/*.h",
         "src/port/*.h",
         # libpq's pqexpbuffer.h is consumed by `pgcommon`'s frontend `jsonapi.c`
@@ -1639,5 +1643,225 @@ cc_binary(
         ":pgfeutils",
         ":pgport",
         ":pq",
+    ],
+)
+
+# CRC32C. The overlay ships only the slicing-by-8 fallback, which is all
+# libpq needs, but the backend calls pg_comp_crc32c through the runtime
+# dispatch pointer that lives in the *_choose.c files. The autoconf probes
+# above set USE_{SSE42,ARMV8}_CRC32C_WITH_RUNTIME_CHECK, so we need the
+# hardware implementation, its chooser, and sb8 as the runtime fallback.
+#
+# The armv8 path is compiled with -march=armv8-a+crc: the intrinsics are
+# guarded by a runtime check, so the flag only has to make them compile, not
+# be safe to execute everywhere.
+cc_library(
+    name = "pgport_crc32c",
+    srcs = select({
+        ":_x86_64_gcc_like": [
+            "src/port/pg_crc32c_sse42.c",
+            "src/port/pg_crc32c_sse42_choose.c",
+            "src/port/pg_crc32c_sb8.c",
+        ],
+        "@platforms//cpu:arm64": [
+            "src/port/pg_crc32c_armv8.c",
+            "src/port/pg_crc32c_armv8_choose.c",
+            "src/port/pg_crc32c_sb8.c",
+        ],
+        "//conditions:default": ["src/port/pg_crc32c_sb8.c"],
+    }),
+    copts = select({
+        "@platforms//cpu:arm64": ["-march=armv8-a+crc"],
+        "//conditions:default": [],
+    }),
+    # pg_comp_crc32c is a function pointer reached through a macro, so the
+    # linker sees no direct reference and drops the archive member.
+    alwayslink = True,
+    deps = [":include"],
+)
+
+# ---------------------------------------------------------------------------
+# Server.
+#
+# src/port and src/common are compiled a second time without FRONTEND: the
+# backend variants call into elog/palloc where the frontend ones use
+# fprintf/malloc, so the two cannot share objects.
+# ---------------------------------------------------------------------------
+
+cc_library(
+    name = "pgport_srv",
+    srcs = _LIBPORT_BASE_SRCS + ["src/port/pg_numa.c"] + select({
+        "@platforms//os:linux": _LIBPORT_LINUX_SRCS,
+        "@platforms//os:macos": _LIBPORT_MACOS_SRCS,
+        "//conditions:default": _LIBPORT_LINUX_SRCS,
+    }),
+    local_defines = select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":include",
+        ":pgport_crc32c",
+        ":ssl_backend",
+    ],
+)
+
+# The server variant drops the four frontend-only files: logging.c and
+# fe_memutils.c #error out under backend compilation, and restricted_token.c
+# and sprompt.c are frontend utilities. Everything else is upstream's
+# common_sources, same as the tools build.
+_LIBCOMMON_SRV = [
+    f
+    for f in _LIBCOMMON_TOOLS
+    if f not in [
+        "src/common/fe_memutils.c",
+        "src/common/logging.c",
+        "src/common/restricted_token.c",
+        "src/common/sprompt.c",
+    ]
+]
+
+cc_library(
+    name = "pgcommon_srv",
+    srcs = _LIBCOMMON_SRV + ["src/common/config_info.c"] + select({
+        ":ssl_none": [
+            "src/common/cryptohash.c",
+            "src/common/hmac.c",
+        ],
+        "//conditions:default": [
+            "src/common/cryptohash_openssl.c",
+            "src/common/hmac_openssl.c",
+        ],
+    }),
+    hdrs = ["src/common/kwlist_d.h"],
+    local_defines = select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":include",
+        ":pgport_srv",
+        ":ssl_backend",
+    ],
+)
+
+# Sources that are #included into another .c rather than compiled on their
+# own. Globbing them into srcs would compile them standalone, without the
+# enclosing file's context, and they fail immediately.
+_BACKEND_INCLUDED_SRCS = [
+    "src/backend/nodes/*.funcs.c",
+    "src/backend/nodes/*.switch.c",
+    "src/backend/regex/regc_*.c",
+    "src/backend/regex/rege_dfa.c",
+    "src/backend/utils/adt/levenshtein.c",
+    "src/backend/utils/adt/like_match.c",
+    # Generated; wait_event.c and wait_event_funcs.c #include these as
+    # "utils/...", and distprep.sh also drops copies under src/include/utils.
+    "src/backend/utils/activity/pgstat_wait_event.c",
+    "src/backend/utils/activity/wait_event_funcs_data.c",
+]
+
+# Everything under src/backend except the pieces that are built as separately
+# loadable modules rather than linked into the server: the snowball stemmers,
+# the encoding-conversion procs, the LLVM JIT provider, and the walreceiver /
+# pgoutput plugins. main.c belongs to the :postgres binary, and the sema/shmem
+# variants not selected for this platform are added back by a select below.
+_BACKEND_EXCLUDES = _BACKEND_INCLUDED_SRCS + [
+    # Conditional on //:with_gssapi and //:with_ssl; added back by selects.
+    "src/backend/libpq/be-gssapi-common.c",
+    "src/backend/libpq/be-secure-gssapi.c",
+    "src/backend/libpq/be-secure-openssl.c",
+    "src/backend/jit/llvm/**",
+    "src/backend/main/**",
+    "src/backend/port/posix_sema.c",
+    "src/backend/port/sysv_sema.c",
+    "src/backend/port/win32_sema.c",
+    "src/backend/port/win32_shmem.c",
+    "src/backend/port/win32/**",
+    "src/backend/replication/libpqwalreceiver/**",
+    "src/backend/replication/pgoutput/**",
+    "src/backend/snowball/libstemmer/**",
+    "src/backend/utils/mb/conversion_procs/**",
+]
+
+cc_library(
+    name = "backend",
+    srcs = glob(
+        ["src/backend/**/*.c"],
+        exclude = _BACKEND_EXCLUDES,
+    ) + select({
+        "@platforms//os:macos": ["src/backend/port/sysv_sema.c"],
+        "//conditions:default": ["src/backend/port/posix_sema.c"],
+    }) + select({
+        ":ssl_none": [],
+        "//conditions:default": ["src/backend/libpq/be-secure-openssl.c"],
+    }) + select({
+        ":gssapi_on": [
+            "src/backend/libpq/be-gssapi-common.c",
+            "src/backend/libpq/be-secure-gssapi.c",
+        ],
+        "//conditions:default": [],
+    }),
+    # The #included .c files go in textual_hdrs, not srcs: anything in srcs is
+    # compiled as its own translation unit, which is exactly what these can't
+    # survive.
+    textual_hdrs = glob(["src/backend/**/*.h"] + _BACKEND_INCLUDED_SRCS),
+    includes = [
+        "src/backend",
+        "src/include",
+    ],
+    local_defines = select({
+        "@platforms//os:linux": ["_GNU_SOURCE"],
+        "//conditions:default": [],
+    }),
+    deps = [
+        ":include",
+        ":pgcommon_srv",
+        ":pgport_srv",
+        ":pgtime",
+        ":ssl_backend",
+    ] + select({
+        ":gssapi_on": [":gssapi_lib"],
+        "//conditions:default": [],
+    }),
+)
+
+# localtime.c/pgtz.c/strftime.c, linked into the backend and (localtime.c
+# alone) into initdb.
+cc_library(
+    name = "pgtime",
+    srcs = [
+        "src/timezone/localtime.c",
+        "src/timezone/pgtz.c",
+        "src/timezone/strftime.c",
+    ],
+    hdrs = glob(["src/timezone/*.h"]),
+    includes = ["src/timezone"],
+    deps = [
+        ":include",
+        ":pgport_srv",
+    ],
+)
+
+cc_binary(
+    name = "postgres",
+    srcs = ["src/backend/main/main.c"],
+    linkopts = select({
+        "@platforms//os:macos": [
+            # Backend extensions resolve server symbols at dlopen() time.
+            "-Wl,-export_dynamic",
+        ],
+        "//conditions:default": [
+            "-Wl,--export-dynamic",
+            "-ldl",
+        ],
+    }),
+    visibility = ["//visibility:public"],
+    deps = [
+        ":backend",
+        ":include",
+        ":pgcommon_srv",
+        ":pgport_srv",
+        ":pgtime",
     ],
 )
