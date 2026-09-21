@@ -13,26 +13,29 @@ BUILD file and, for releases that need them, pre-generated sources overlaid on
 top. See templates/README.md for why those are checked in.
 """
 
-load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 load(":config_repo.bzl", "postgres_config_repo")
+load(":repo.bzl", "postgres_repo")
 load(":versions.bzl", "VERSIONS")
 
 def _default_repo_name(version):
     return "postgres_" + version.replace(".", "_")
 
-def _overlay(module_ctx, template):
-    """Maps every file under templates/<template>/files/ to its archive path.
+def _generated_files(module_ctx, version):
+    """Per-minor generated sources, or {} for releases that ship their own.
 
-    The tree mirrors the archive layout, so files/BUILD.bazel becomes the root
-    BUILD file and files/src/backend/parser/gram.c replaces that source. The
-    manifest lists the paths because Starlark can't glob a directory here.
+    16.x tarballs still carry their distprep output; 17.x and 18.x don't, so
+    those versions get a templates/<version>/files/ tree. See
+    templates/README.md.
     """
-    manifest = module_ctx.read(Label("//templates:{}/files.manifest".format(template)))
+    manifest_label = Label("//templates:{}/files.manifest".format(version))
+    if not module_ctx.path(manifest_label).exists:
+        return {}
+
     files = {}
-    for line in manifest.splitlines():
+    for line in module_ctx.read(manifest_label).splitlines():
         path = line.strip()
         if path:
-            files[path] = Label("//templates:{}/files/{}".format(template, path))
+            files[path] = Label("//templates:{}/files/{}".format(version, path))
     return files
 
 def _postgres_impl(module_ctx):
@@ -58,14 +61,15 @@ def _postgres_impl(module_ctx):
                     ", ".join(sorted(VERSIONS)),
                 ))
 
-            template = tag.template or (known.template if known else tag.version)
-            http_archive(
+            major = tag.template or (known.major if known else tag.version.split(".")[0])
+            postgres_repo(
                 name = name,
-                build_file = None,
-                files = _overlay(module_ctx, template),
+                build_file = Label("//templates:major/{}/BUILD.bazel".format(major)),
+                module_file = Label("//templates:major/{}/MODULE.bazel.template".format(major)),
+                generated = _generated_files(module_ctx, tag.version),
                 sha256 = tag.sha256 or known.sha256,
-                strip_prefix = "postgresql-" + tag.version,
-                urls = [tag.url or known.url],
+                url = tag.url or known.url,
+                version = tag.version,
             )
             created.append(name)
 
@@ -96,7 +100,7 @@ postgres = module_extension(
                     doc = "Tarball sha256. Only used together with url.",
                 ),
                 "template": attr.string(
-                    doc = "Directory under templates/ to overlay. Defaults to the one versions.bzl names for this release.",
+                    doc = "Major-version BUILD template to use, e.g. \"18\". Defaults to this release's own major.",
                 ),
             },
         ),

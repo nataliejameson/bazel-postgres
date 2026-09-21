@@ -1,3 +1,7 @@
+# Overlay files. major/<n>/ holds the BUILD file shared by every release of
+# that major version; <version>/files/ holds the per-release generated sources
+# for the majors that need them.
+#
 # Per-release overlay trees. extension.bzl symlinks everything under
 # templates/<version>/files/ onto the fetched tarball, preserving relative
 # paths, so files/BUILD.bazel becomes the repo's root BUILD file and
@@ -9,6 +13,8 @@
 exports_files(
     glob(
         [
+            "major/*/BUILD.bazel",
+            "major/*/MODULE.bazel.template",
             "*/files/**",
             "*/files.manifest",
         ],

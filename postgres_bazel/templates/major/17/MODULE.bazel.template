@@ -1,0 +1,11 @@
+"""https://www.postgresql.org/
+
+Not a module anyone depends on directly: postgres_bazel's extension generates
+this repository. It exists because rules_cc_autoconf's package_info reads the
+version out of a MODULE.bazel to fill in PACKAGE_STRING and friends.
+"""
+
+module(
+    name = "postgres",
+    version = "{version}",
+)

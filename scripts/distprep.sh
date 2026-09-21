@@ -62,9 +62,59 @@ SRC="$WORK/postgresql-${VERSION}"
 cd "$SRC"
 
 PG_MAJOR=${VERSION%%.*}
+
 MANIFEST="$WORK/generated.manifest"
 : > "$MANIFEST"
 record() { for f in "$@"; do [ -e "$f" ] && echo "$f" >> "$MANIFEST"; done; }
+
+# dtrace stand-in. 16 ships Gen_dummy_probes.sed and builds its .pl from a
+# .prolog at build time, so the .pl alone isn't runnable there; 17+ ship only
+# the perl script, which is sed-style and needs perl -n.
+gen_probes() {
+    if [ -f src/backend/utils/Gen_dummy_probes.sed ]; then
+        sed -f src/backend/utils/Gen_dummy_probes.sed src/backend/utils/probes.d
+    else
+        perl -n src/backend/utils/Gen_dummy_probes.pl src/backend/utils/probes.d
+    fi
+}
+
+# 16.x tarballs still carry most of their distprep output; 17 dropped it and
+# 18 dropped it too while adding more generators. Where a file already ships
+# we keep the shipped copy, so the generator runs below are all guarded.
+SHIPS_DISTPREP=no
+[ -f src/backend/parser/gram.c ] && SHIPS_DISTPREP=yes
+
+# Even a tarball that ships the output only puts it under src/backend; the
+# build expects it under src/include too, which upstream does with symlinks.
+# Copy rather than regenerate so we keep exactly what upstream shipped.
+if [ "$SHIPS_DISTPREP" = yes ]; then
+    echo >&2 "  postgresql-${VERSION} ships its generated sources; staging them"
+    cp src/backend/catalog/pg_*_d.h src/backend/catalog/schemapg.h \
+       src/backend/catalog/system_fk_info.h src/include/catalog/
+    cp src/backend/nodes/nodetags.h src/include/nodes/
+    cp src/backend/utils/fmgroids.h src/backend/utils/fmgrprotos.h \
+       src/backend/utils/errcodes.h src/include/utils/
+    cp src/backend/storage/lmgr/lwlocknames.h src/include/storage/
+    record src/include/catalog/pg_*_d.h src/include/catalog/schemapg.h \
+           src/include/catalog/system_fk_info.h src/include/nodes/nodetags.h \
+           src/include/utils/fmgroids.h src/include/utils/fmgrprotos.h \
+           src/include/utils/errcodes.h src/include/storage/lwlocknames.h
+
+    # probes.h is the one output never shipped in any release.
+    gen_probes > src/include/utils/probes.h
+    record src/include/utils/probes.h
+
+    sort -u "$MANIFEST" -o "$MANIFEST"
+    rm -rf "${DEST}/files"
+    mkdir -p "${DEST}/files"
+    while read -r f; do
+        mkdir -p "${DEST}/files/$(dirname "$f")"
+        cp "$f" "${DEST}/files/$f"
+    done < "$MANIFEST"
+    (cd "${DEST}/files" && find . -type f | sed 's|^\./||' | sort) > "${DEST}/files.manifest"
+    echo >&2 "Staged $(wc -l < "$MANIFEST" | tr -d ' ') files for ${VERSION}."
+    exit 0
+fi
 
 # Ordered header lists, read from upstream's own build files so they stay
 # right across version bumps. Order matters: genbki needs the bootstrap
@@ -107,6 +157,8 @@ perl src/backend/utils/generate-errcodes.pl \
     --outfile src/include/utils/errcodes.h src/backend/utils/errcodes.txt
 record src/include/utils/errcodes.h
 
+# 17 introduced the wait-event tables.
+if [ -f src/backend/utils/activity/generate-wait_event_types.pl ]; then
 echo >&2 "  generate-wait_event_types.pl"
 perl src/backend/utils/activity/generate-wait_event_types.pl \
     --outdir src/backend/utils/activity --code \
@@ -123,18 +175,24 @@ record src/include/utils/wait_event_types.h \
        src/backend/utils/activity/wait_event_types.h \
        src/backend/utils/activity/pgstat_wait_event.c \
        src/backend/utils/activity/wait_event_funcs_data.c
+fi
 
 echo >&2 "  generate-lwlocknames.pl"
-perl src/backend/storage/lmgr/generate-lwlocknames.pl \
-    --outdir src/include/storage \
-    src/include/storage/lwlocklist.h src/backend/utils/activity/wait_event_names.txt >/dev/null
+if [ -f src/include/storage/lwlocklist.h ]; then
+    perl src/backend/storage/lmgr/generate-lwlocknames.pl \
+        --outdir src/include/storage \
+        src/include/storage/lwlocklist.h src/backend/utils/activity/wait_event_names.txt >/dev/null
+else
+    perl src/backend/storage/lmgr/generate-lwlocknames.pl \
+        --outdir src/include/storage \
+        src/backend/storage/lmgr/lwlocknames.txt >/dev/null
+fi
 record src/include/storage/lwlocknames.h
 
 # Gen_dummy_probes.pl is a sed-style script, hence perl -n. It stands in for
 # dtrace, which we don't build against.
-echo >&2 "  Gen_dummy_probes.pl"
-perl -n src/backend/utils/Gen_dummy_probes.pl src/backend/utils/probes.d \
-    > src/include/utils/probes.h
+echo >&2 "  Gen_dummy_probes"
+gen_probes > src/include/utils/probes.h
 record src/include/utils/probes.h
 
 echo >&2 "  snowball_create.pl"
@@ -145,9 +203,14 @@ record src/backend/snowball/snowball_create.sql
 echo >&2 "  create_help.pl / gen_tabcomplete.pl"
 perl src/bin/psql/create_help.pl \
     --docdir doc/src/sgml/ref --outdir src/bin/psql --basename sql_help >/dev/null
-perl src/bin/psql/gen_tabcomplete.pl \
-    --outfile src/bin/psql/tab-complete.c src/bin/psql/tab-complete.in.c
-record src/bin/psql/sql_help.c src/bin/psql/sql_help.h src/bin/psql/tab-complete.c
+record src/bin/psql/sql_help.c src/bin/psql/sql_help.h
+# 18 started generating tab-complete.c from tab-complete.in.c; before that it
+# was an ordinary source file already in the tarball.
+if [ -f src/bin/psql/gen_tabcomplete.pl ]; then
+    perl src/bin/psql/gen_tabcomplete.pl \
+        --outfile src/bin/psql/tab-complete.c src/bin/psql/tab-complete.in.c
+    record src/bin/psql/tab-complete.c
+fi
 
 # plpgsql is a loadable module, but initdb's bootstrap does CREATE EXTENSION
 # plpgsql, so the server can't finish initialising without it.
@@ -189,19 +252,18 @@ flex_gen "-Cfe -p -p" src/bin/psql/psqlscanslash
 sort -u "$MANIFEST" -o "$MANIFEST"
 
 # Stage into templates/<version>/files/, which mirrors the archive layout.
-# The hand-written overlay in there (BUILD.bazel, dist.bzl, private/) is not
-# ours to touch, so only the generated paths are replaced.
+# Only generated sources live here; the BUILD file is shared per major.
+rm -rf "${DEST}/files"
 mkdir -p "${DEST}/files"
 while read -r f; do
     mkdir -p "${DEST}/files/$(dirname "$f")"
     cp "$f" "${DEST}/files/$f"
 done < "$MANIFEST"
 
-if [ ! -f "${DEST}/files/BUILD.bazel" ]; then
+if [ ! -f "${MODULE}/templates/major/${PG_MAJOR}/BUILD.bazel" ]; then
     echo >&2
-    echo >&2 "note: ${DEST}/files/BUILD.bazel does not exist yet. Copy the overlay"
-    echo >&2 "      (BUILD.bazel, dist.bzl, private/) from another release of the"
-    echo >&2 "      same major version and adjust it."
+    echo >&2 "note: templates/major/${PG_MAJOR}/BUILD.bazel does not exist yet."
+    echo >&2 "      Copy it from the nearest major version and adjust."
 fi
 
 # extension.bzl reads this to know what to symlink over the tarball.

@@ -2,6 +2,12 @@ load("@postgres_bazel//:defs.bzl", "postgres_smoke_test")
 
 # One of these per version: initdb a cluster, start it, query it, shut it down.
 postgres_smoke_test(
+    name = "postgres_16_14_smoke_test",
+    repo = "@postgres_16_14",
+    version = "16.14",
+)
+
+postgres_smoke_test(
     name = "postgres_18_4_smoke_test",
     repo = "@postgres_18_4",
     version = "18.4",

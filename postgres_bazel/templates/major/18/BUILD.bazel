@@ -23,13 +23,13 @@ load("@postgres_config//private:curl_ssl_transition.bzl", "pg_ssl_bundle")
 # ---------------------------------------------------------------------------
 # Version metadata.
 # ---------------------------------------------------------------------------
-PG_MAJORVERSION_NUM = "18"
+PG_MAJORVERSION_NUM = "{major}"
 
-PG_MINORVERSION_NUM = "4"
+PG_MINORVERSION_NUM = "{minor}"
 
-PG_VERSION = "18.4"
+PG_VERSION = "{version}"
 
-PG_VERSION_NUM = "180004"
+PG_VERSION_NUM = "{version_num}"
 
 # ---------------------------------------------------------------------------
 # Build settings live in @postgres_config so a project depending on several
@@ -1311,7 +1311,6 @@ _LIBCOMMON_TOOLS = [
     "src/common/fe_memutils.c",
     "src/common/file_perm.c",
     "src/common/file_utils.c",
-    "src/common/hashfn.c",
     "src/common/ip.c",
     "src/common/jsonapi.c",
     "src/common/keywords.c",
@@ -1469,6 +1468,31 @@ cc_library(
     # pg_comp_crc32c is a function pointer reached through a macro, so the
     # linker sees no direct reference and drops the archive member.
     alwayslink = True,
+    local_defines = ["FRONTEND"],
+    deps = [":include"],
+)
+cc_library(
+    name = "pgport_crc32c_srv",
+    # pg_crc32c_sb8.c is the runtime fallback and already comes from
+    # _LIBPORT_BASE_SRCS; listing it again here would define its symbols twice.
+    srcs = select({
+        ":_x86_64_gcc_like": [
+            "src/port/pg_crc32c_sse42.c",
+            "src/port/pg_crc32c_sse42_choose.c",
+        ],
+        "@platforms//cpu:arm64": [
+            "src/port/pg_crc32c_armv8.c",
+            "src/port/pg_crc32c_armv8_choose.c",
+        ],
+        "//conditions:default": [],
+    }),
+    copts = select({
+        "@platforms//cpu:arm64": ["-march=armv8-a+crc"],
+        "//conditions:default": [],
+    }),
+    # pg_comp_crc32c is a function pointer reached through a macro, so the
+    # linker sees no direct reference and drops the archive member.
+    alwayslink = True,
     deps = [":include"],
 )
 
@@ -1493,7 +1517,7 @@ cc_library(
     }),
     deps = [
         ":include",
-        ":pgport_crc32c",
+        ":pgport_crc32c_srv",
         ":ssl_backend",
     ],
 )
@@ -1502,7 +1526,7 @@ cc_library(
 # fe_memutils.c #error out under backend compilation, and restricted_token.c
 # and sprompt.c are frontend utilities. Everything else is upstream's
 # common_sources, same as the tools build.
-_LIBCOMMON_SRV = [
+_LIBCOMMON_SRV = ["src/common/hashfn.c"] + [
     f
     for f in _LIBCOMMON_TOOLS
     if f not in [

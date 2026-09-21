@@ -7,5 +7,5 @@ version out of a MODULE.bazel to fill in PACKAGE_STRING and friends.
 
 module(
     name = "postgres",
-    version = "18.4",
+    version = "{version}",
 )

@@ -7,5 +7,6 @@ local_path_override(
 )
 
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
+postgres.add_version(version = "16.14")
 postgres.add_version(version = "18.4")
-use_repo(postgres, "postgres_18_4", "postgres_config")
+use_repo(postgres, "postgres_16_14", "postgres_18_4", "postgres_config")
