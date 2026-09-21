@@ -902,6 +902,7 @@ _LIBPORT_BASE_SRCS = [
     "src/port/snprintf.c",
     "src/port/strerror.c",
     "src/port/tar.c",
+    "src/port/user.c",
 ]
 
 # Replacement files compiled when the OS libc lacks the function. Upstream's
@@ -1166,6 +1167,7 @@ _LIBPQ_PUBLIC_HDRS = [
 
 _LIBPQ_BASE_SRCS = [
     "src/interfaces/libpq/fe-auth.c",
+    "src/interfaces/libpq/fe-cancel.c",
     "src/interfaces/libpq/fe-auth-scram.c",
     "src/interfaces/libpq/fe-connect.c",
     "src/interfaces/libpq/fe-exec.c",
@@ -1323,6 +1325,8 @@ alias(
 _LIBCOMMON_TOOLS = [
     "src/common/archive.c",
     "src/common/base64.c",
+    "src/common/binaryheap.c",
+    "src/common/blkreftable.c",
     "src/common/checksum_helper.c",
     "src/common/compression.c",
     "src/common/controldata_utils.c",
@@ -1340,6 +1344,7 @@ _LIBCOMMON_TOOLS = [
     "src/common/link-canary.c",
     "src/common/logging.c",
     "src/common/md5_common.c",
+    "src/common/parse_manifest.c",
     "src/common/percentrepl.c",
     "src/common/pg_get_line.c",
     "src/common/pg_lzcompress.c",
@@ -1354,6 +1359,8 @@ _LIBCOMMON_TOOLS = [
     "src/common/sprompt.c",
     "src/common/string.c",
     "src/common/stringinfo.c",
+    "src/common/unicode_case.c",
+    "src/common/unicode_category.c",
     "src/common/unicode_norm.c",
     "src/common/username.c",
     "src/common/wait_error.c",
@@ -1615,6 +1622,11 @@ _BACKEND_EXCLUDES = _BACKEND_INCLUDED_SRCS + [
     "src/backend/replication/pgoutput/**",
     "src/backend/snowball/libstemmer/**",
     "src/backend/utils/mb/conversion_procs/**",
+    # Standalone helpers that generate conversion tables; upstream's
+    # utils/mb/Makefile leaves them out of OBJS.
+    "src/backend/utils/mb/iso.c",
+    "src/backend/utils/mb/win1251.c",
+    "src/backend/utils/mb/win866.c",
 ]
 
 cc_library(

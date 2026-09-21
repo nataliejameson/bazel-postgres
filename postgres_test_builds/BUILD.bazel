@@ -8,6 +8,12 @@ postgres_smoke_test(
 )
 
 postgres_smoke_test(
+    name = "postgres_17_10_smoke_test",
+    repo = "@postgres_17_10",
+    version = "17.10",
+)
+
+postgres_smoke_test(
     name = "postgres_18_4_smoke_test",
     repo = "@postgres_18_4",
     version = "18.4",
