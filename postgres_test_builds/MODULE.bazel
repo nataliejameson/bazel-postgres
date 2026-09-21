@@ -7,7 +7,65 @@ local_path_override(
 )
 
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
+postgres.add_version(version = "16.2")
+postgres.add_version(version = "16.3")
+postgres.add_version(version = "16.4")
+postgres.add_version(version = "16.5")
+postgres.add_version(version = "16.6")
+postgres.add_version(version = "16.7")
+postgres.add_version(version = "16.8")
+postgres.add_version(version = "16.9")
+postgres.add_version(version = "16.10")
+postgres.add_version(version = "16.11")
+postgres.add_version(version = "16.12")
+postgres.add_version(version = "16.13")
 postgres.add_version(version = "16.14")
+postgres.add_version(version = "17.0")
+postgres.add_version(version = "17.1")
+postgres.add_version(version = "17.2")
+postgres.add_version(version = "17.3")
+postgres.add_version(version = "17.4")
+postgres.add_version(version = "17.5")
+postgres.add_version(version = "17.6")
+postgres.add_version(version = "17.7")
+postgres.add_version(version = "17.8")
+postgres.add_version(version = "17.9")
 postgres.add_version(version = "17.10")
+postgres.add_version(version = "18.0")
+postgres.add_version(version = "18.1")
+postgres.add_version(version = "18.2")
+postgres.add_version(version = "18.3")
 postgres.add_version(version = "18.4")
-use_repo(postgres, "postgres_16_14", "postgres_17_10", "postgres_18_4", "postgres_config")
+use_repo(
+    postgres,
+    "postgres_16_2",
+    "postgres_16_3",
+    "postgres_16_4",
+    "postgres_16_5",
+    "postgres_16_6",
+    "postgres_16_7",
+    "postgres_16_8",
+    "postgres_16_9",
+    "postgres_16_10",
+    "postgres_16_11",
+    "postgres_16_12",
+    "postgres_16_13",
+    "postgres_16_14",
+    "postgres_17_0",
+    "postgres_17_1",
+    "postgres_17_2",
+    "postgres_17_3",
+    "postgres_17_4",
+    "postgres_17_5",
+    "postgres_17_6",
+    "postgres_17_7",
+    "postgres_17_8",
+    "postgres_17_9",
+    "postgres_17_10",
+    "postgres_18_0",
+    "postgres_18_1",
+    "postgres_18_2",
+    "postgres_18_3",
+    "postgres_18_4",
+    "postgres_config",
+)

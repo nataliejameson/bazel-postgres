@@ -1,10 +1,144 @@
 load("@postgres_bazel//:defs.bzl", "postgres_smoke_test")
 
-# One of these per version: initdb a cluster, start it, query it, shut it down.
+# Every supported release: initdb a cluster, start it, query it, shut it
+# down. This is what scripts/test.sh runs in CI.
+
+postgres_smoke_test(
+    name = "postgres_16_2_smoke_test",
+    repo = "@postgres_16_2",
+    version = "16.2",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_3_smoke_test",
+    repo = "@postgres_16_3",
+    version = "16.3",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_4_smoke_test",
+    repo = "@postgres_16_4",
+    version = "16.4",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_5_smoke_test",
+    repo = "@postgres_16_5",
+    version = "16.5",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_6_smoke_test",
+    repo = "@postgres_16_6",
+    version = "16.6",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_7_smoke_test",
+    repo = "@postgres_16_7",
+    version = "16.7",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_8_smoke_test",
+    repo = "@postgres_16_8",
+    version = "16.8",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_9_smoke_test",
+    repo = "@postgres_16_9",
+    version = "16.9",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_10_smoke_test",
+    repo = "@postgres_16_10",
+    version = "16.10",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_11_smoke_test",
+    repo = "@postgres_16_11",
+    version = "16.11",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_12_smoke_test",
+    repo = "@postgres_16_12",
+    version = "16.12",
+)
+
+postgres_smoke_test(
+    name = "postgres_16_13_smoke_test",
+    repo = "@postgres_16_13",
+    version = "16.13",
+)
+
 postgres_smoke_test(
     name = "postgres_16_14_smoke_test",
     repo = "@postgres_16_14",
     version = "16.14",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_0_smoke_test",
+    repo = "@postgres_17_0",
+    version = "17.0",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_1_smoke_test",
+    repo = "@postgres_17_1",
+    version = "17.1",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_2_smoke_test",
+    repo = "@postgres_17_2",
+    version = "17.2",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_3_smoke_test",
+    repo = "@postgres_17_3",
+    version = "17.3",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_4_smoke_test",
+    repo = "@postgres_17_4",
+    version = "17.4",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_5_smoke_test",
+    repo = "@postgres_17_5",
+    version = "17.5",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_6_smoke_test",
+    repo = "@postgres_17_6",
+    version = "17.6",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_7_smoke_test",
+    repo = "@postgres_17_7",
+    version = "17.7",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_8_smoke_test",
+    repo = "@postgres_17_8",
+    version = "17.8",
+)
+
+postgres_smoke_test(
+    name = "postgres_17_9_smoke_test",
+    repo = "@postgres_17_9",
+    version = "17.9",
 )
 
 postgres_smoke_test(
@@ -14,17 +148,31 @@ postgres_smoke_test(
 )
 
 postgres_smoke_test(
+    name = "postgres_18_0_smoke_test",
+    repo = "@postgres_18_0",
+    version = "18.0",
+)
+
+postgres_smoke_test(
+    name = "postgres_18_1_smoke_test",
+    repo = "@postgres_18_1",
+    version = "18.1",
+)
+
+postgres_smoke_test(
+    name = "postgres_18_2_smoke_test",
+    repo = "@postgres_18_2",
+    version = "18.2",
+)
+
+postgres_smoke_test(
+    name = "postgres_18_3_smoke_test",
+    repo = "@postgres_18_3",
+    version = "18.3",
+)
+
+postgres_smoke_test(
     name = "postgres_18_4_smoke_test",
     repo = "@postgres_18_4",
     version = "18.4",
-)
-
-alias(
-    name = "postgres_18_4_psql",
-    actual = "@postgres_18_4//:psql",
-)
-
-alias(
-    name = "postgres_18_4_libpq",
-    actual = "@postgres_18_4//:libpq",
 )
