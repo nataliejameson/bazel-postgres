@@ -1,0 +1,4 @@
+# Source for the @postgres_config repository, materialised by config_repo.bzl.
+# These are data rather than part of this repo's build; BUILD.bazel.template
+# is named that way so it isn't treated as this package's build file.
+exports_files(glob(["**"], exclude_directories = 1))

@@ -1,0 +1,218 @@
+"""Build settings shared by every PostgreSQL version this module builds.
+
+These live in one repository so a project that depends on several releases
+configures them once:
+
+    --@postgres_config//:with_ssl=boringssl
+
+rather than repeating the flag per version. Each generated postgres repo
+selects on the config_settings here.
+"""
+
+load("@bazel_skylib//rules:common_settings.bzl", "bool_flag", "string_flag")
+load("@rules_cc//cc:cc_library.bzl", "cc_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# ---------------------------------------------------------------------------
+# Public configure-style flags.
+#
+# Each maps to an `--with-*` / `--enable-*` switch in upstream configure.ac.
+# Only flags meaningful to libpq, libcommon, libpgport (and the frontend tools
+# layered on top) are exposed. Server-only switches such as `--with-icu` are
+# intentionally omitted because nothing in this build links them.
+# ---------------------------------------------------------------------------
+
+# `--with-ssl=LIB` (`--with-openssl` in older releases). Selects the SSL/TLS
+# backend libpq compiles against. "openssl" pulls in `@openssl`, "boringssl"
+# pulls in `@boringssl` (a Bazel-specific extension of the upstream switch),
+# "none" disables SSL entirely. Drives `USE_OPENSSL`, `HAVE_LIBSSL`,
+# `HAVE_LIBCRYPTO`, and the per-backend optional function probes.
+string_flag(
+    name = "with_ssl",
+    build_setting_default = "openssl",
+    values = [
+        "none",
+        "openssl",
+        "boringssl",
+    ],
+)
+
+# `--with-gssapi`: build with Kerberos/GSSAPI authentication. When enabled
+# `fe-gssapi-common.c` and `fe-secure-gssapi.c` are compiled into libpq and
+# linked against the GSSAPI library named by `:gssapi_lib`. The BCR has no
+# canonical Kerberos module today, so consumers must point `:gssapi_lib` at a
+# `cc_library` they provide (e.g. a `system_library` wrapping the host
+# `libgssapi_krb5.so`). With the flag off, neither `ENABLE_GSS` nor the
+# GSSAPI source files are added — `:gssapi_lib` is unused.
+bool_flag(
+    name = "with_gssapi",
+    build_setting_default = False,
+)
+
+# Label of the `cc_library` that provides GSSAPI headers + link inputs. Only
+# consulted when `:with_gssapi` is `True`. There is no canonical Kerberos
+# module in the BCR, so the default points at `:gssapi_system_lib`, a tiny
+# `cc_library` that uses `linkopts = ["-lgssapi_krb5"]` to pick up the host
+# system's MIT/Heimdal Kerberos. Consumers that want to vendor their own
+# Kerberos build (or disable the dep entirely) override this flag with their
+# own `cc_library`:
+#
+#     bazel build --//:with_gssapi=True \
+#                 --//:gssapi_lib=//my:vendored_kerberos
+#
+# Setting it to an empty cc_library disables the link entirely while still
+# compiling the GSSAPI source paths.
+label_flag(
+    name = "gssapi_lib",
+    build_setting_default = ":gssapi_system_lib",
+)
+
+# Default GSSAPI provider — links the host's system Kerberos via -l flags.
+# Assumes MIT or Heimdal's libgssapi_krb5 / com_err are installed; if not,
+# override `--//:gssapi_lib` with a `cc_library` you control.
+cc_library(
+    name = "gssapi_system_lib",
+    linkopts = select({
+        "@platforms//os:macos": [
+            # macOS ships Heimdal in /usr/lib but the headers live in the
+            # GSS.framework. Consumers who want full GSSAPI on macOS should
+            # override this with a cc_library that adds the framework.
+            "-lgssapi_krb5",
+        ],
+        "@platforms//os:windows": [],
+        "//conditions:default": [
+            "-lgssapi_krb5",
+            "-lkrb5",
+            "-lk5crypto",
+            "-lcom_err",
+        ],
+    }),
+)
+
+bool_flag(
+    name = "with_zlib",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "with_lz4",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "with_zstd",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "with_libcurl",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "with_readline",
+    build_setting_default = False,
+)
+
+bool_flag(
+    name = "enable_cassert",
+    build_setting_default = False,
+)
+
+string_flag(
+    name = "with_pgport",
+    build_setting_default = "5432",
+)
+
+string_flag(
+    name = "with_krb_srvnam",
+    build_setting_default = "postgres",
+)
+
+string_flag(
+    name = "with_blocksize",
+    build_setting_default = "8",
+    values = [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16",
+        "32",
+    ],
+)
+
+string_flag(
+    name = "with_wal_blocksize",
+    build_setting_default = "8",
+    values = [
+        "1",
+        "2",
+        "4",
+        "8",
+        "16",
+        "32",
+        "64",
+    ],
+)
+
+string_flag(
+    name = "with_segsize",
+    build_setting_default = "1",
+)
+
+# ---------------------------------------------------------------------------
+# config_setting helpers (used in select()s below).
+# ---------------------------------------------------------------------------
+
+config_setting(
+    name = "ssl_openssl",
+    flag_values = {":with_ssl": "openssl"},
+)
+
+config_setting(
+    name = "ssl_boringssl",
+    flag_values = {":with_ssl": "boringssl"},
+)
+
+config_setting(
+    name = "ssl_none",
+    flag_values = {":with_ssl": "none"},
+)
+
+config_setting(
+    name = "gssapi_on",
+    flag_values = {":with_gssapi": "True"},
+)
+
+config_setting(
+    name = "zlib_on",
+    flag_values = {":with_zlib": "True"},
+)
+
+config_setting(
+    name = "lz4_on",
+    flag_values = {":with_lz4": "True"},
+)
+
+config_setting(
+    name = "zstd_on",
+    flag_values = {":with_zstd": "True"},
+)
+
+config_setting(
+    name = "libcurl_on",
+    flag_values = {":with_libcurl": "True"},
+)
+
+config_setting(
+    name = "readline_on",
+    flag_values = {":with_readline": "True"},
+)
+
+config_setting(
+    name = "cassert_on",
+    flag_values = {":enable_cassert": "True"},
+)
+

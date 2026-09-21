@@ -1,8 +1,5 @@
 BUILD.bazel
-dist.bzl
 MODULE.bazel
-private/BUILD.bazel
-private/curl_ssl_transition.bzl
 src/backend/bootstrap/bootparse.c
 src/backend/bootstrap/bootparse.h
 src/backend/bootstrap/bootscanner.c

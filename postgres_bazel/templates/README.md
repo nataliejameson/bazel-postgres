@@ -8,9 +8,11 @@ can't glob a directory from a module extension.
 
 A tree holds two kinds of file.
 
-**Hand-written** — `BUILD.bazel`, `dist.bzl`, `private/`, and a stub
-`MODULE.bazel` that exists only because `rules_cc_autoconf`'s `package_info`
-reads a version string out of one. Edit these directly.
+**Hand-written** — `BUILD.bazel` and a stub `MODULE.bazel` that exists only
+because `rules_cc_autoconf`'s `package_info` reads a version string out of
+one. Edit these directly. The build settings and shared starlark they refer
+to live in `@postgres_config` (see `config/` at the module root), not here,
+so every version shares one set of flags.
 
 **Generated** — everything under `src/`, produced by `scripts/distprep.sh
 <version>`. Don't hand-edit; re-run the script.
@@ -37,8 +39,8 @@ the hand-written files.
 
 1. Add it to `versions.bzl` with its tarball sha256.
 2. `scripts/distprep.sh <version>`.
-3. Copy the hand-written overlay from the nearest release of the same major
-   version and adjust. Between majors expect real differences: 18 added
+3. Copy `files/BUILD.bazel` and `files/MODULE.bazel` from the nearest release
+   of the same major version and adjust. Between majors expect real differences: 18 added
    `gen_tabcomplete.pl` and `generate-wait_event_types.pl`, and moved
    `generate-lwlocknames.pl` onto `lwlocklist.h`.
 4. Add a `postgres_smoke_test` for it in `postgres_test_builds/BUILD.bazel`.

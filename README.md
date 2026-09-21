@@ -18,7 +18,7 @@ bazel_dep(name = "postgres_bazel")
 
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
 postgres.add_version(version = "18.4")
-use_repo(postgres, "postgres_18_4")
+use_repo(postgres, "postgres_18_4", "postgres_config")
 ```
 
 Then depend on what you need:
@@ -30,11 +30,20 @@ cc_library(
 )
 ```
 
-Targets per version: `libpq`, `psql`, `initdb`, `pg_ctl`, `postgres`, and
-`pg_dist` — a `bin/` + `share/` tree laid out so the binaries are actually
-runnable. That layout matters: `get_share_path()` locates `PGSHAREDIR` by
-walking up from the running executable, and only does so when the binary sits
-in a directory named `bin`.
+Targets per version: `libpq`, and a `<name>_bin` wrapper for each of `psql`,
+`initdb`, `pg_ctl` and `postgres`:
+
+```sh
+bazel run @postgres_18_4//:psql_bin -- --version
+```
+
+The wrappers carry the installation tree as runfiles and exec the right
+binary out of it, so they work as `bazel run` targets, as tools, or in a
+test's `data` — no `$(location ...)/bin/psql` plumbing. The tree itself is
+`pg_dist` if you need it directly; its `bin/` + `share/` layout matters,
+because `get_share_path()` locates `PGSHAREDIR` by walking up from the
+running executable and only does so when the binary sits in a directory
+named `bin`.
 
 `add_version` also takes `repo_name` to override the default
 `postgres_<version>`, and `url` + `sha256` (both or neither) to build a
@@ -50,7 +59,7 @@ load("@postgres_bazel//:defs.bzl", "postgres_smoke_test")
 
 postgres_smoke_test(
     name = "pg_18_4_smoke_test",
-    dist = "@postgres_18_4//:pg_dist",
+    repo = "@postgres_18_4",
     version = "18.4",
 )
 ```
@@ -66,8 +75,18 @@ test.
 
 ## Build configuration
 
-The overlay exposes upstream's `--with-*` switches as Bazel flags:
-`--@postgres_18_4//:with_ssl=openssl|boringssl|none`, and boolean
-`with_zlib`, `with_lz4`, `with_zstd`, `with_libcurl`, `with_readline`,
-`with_gssapi`, `enable_cassert`. `pg_config.h` is produced by a real
-`rules_cc_autoconf` probe of upstream's `pg_config.h.in`, not hand-maintained.
+Upstream's `--with-*` switches are Bazel flags, and they live in one shared
+`@postgres_config` repository rather than per version, so a project building
+several releases configures them once:
+
+```sh
+bazel build --@postgres_config//:with_ssl=boringssl //...
+```
+
+`with_ssl` takes `openssl` (default), `boringssl` or `none`; `with_zlib`,
+`with_lz4`, `with_zstd`, `with_libcurl`, `with_readline`, `with_gssapi` and
+`enable_cassert` are booleans; `with_pgport`, `with_blocksize`,
+`with_wal_blocksize` and `with_segsize` take values.
+
+`pg_config.h` comes from a real `rules_cc_autoconf` probe of upstream's
+`pg_config.h.in`, not a hand-maintained header.

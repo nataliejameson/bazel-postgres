@@ -1,14 +1,14 @@
-"""Incoming-edge transition that pins `@curl//:ssl_lib` to `//:with_ssl`.
+"""Incoming-edge transition that pins `@curl//:ssl_lib` to `@postgres_config//:with_ssl`.
 
 `@curl//:curl` carries its own `ssl_lib` flag (defaulted to BoringSSL) that
 selects which SSL library it links against. If postgres uses
-`--//:with_ssl=openssl` but `--@curl//:ssl_lib` is left at its module
+`--@postgres_config//:with_ssl=openssl` but `--@curl//:ssl_lib` is left at its module
 default, the final link will pull in both `@openssl` and `@boringssl` and
 trip duplicate-symbol errors (macOS's `ld` rejects them outright; GNU ld
 silently picks one).
 
 The fix is to bundle every SSL-touching dep of libpq — `@openssl` /
-`@boringssl` themselves and (when `--//:with_libcurl=True`) `@curl//:curl`
+`@boringssl` themselves and (when `--@postgres_config//:with_libcurl=True`) `@curl//:curl`
 — into a single `cc_library`, then wrap that bundle with this transition.
 Because every libpq target that needs SSL routes through the wrapped
 bundle, there is exactly one path through the build graph that reaches
@@ -20,13 +20,13 @@ paths would reach `@openssl` at different configs, and Bazel's
 `cc_shared_library` machinery would refuse to link the same `libssl`
 built in two different configurations.
 
-`--//:with_ssl=none` leaves `@curl//:ssl_lib` at its default since libcurl
+`--@postgres_config//:with_ssl=none` leaves `@curl//:ssl_lib` at its default since libcurl
 isn't linked in that case.
 """
 
 load("@rules_cc//cc/common:cc_info.bzl", "CcInfo")
 
-_WITH_SSL = str(Label("//:with_ssl"))
+_WITH_SSL = str(Label("@postgres_config//:with_ssl"))
 
 _CURL_SSL_LIB = str(Label("@curl//:ssl_lib"))
 
@@ -49,7 +49,7 @@ def _pg_ssl_bundle_impl(ctx):
 
 pg_ssl_bundle = rule(
     implementation = _pg_ssl_bundle_impl,
-    doc = "Re-exports a `cc_library` with `@curl//:ssl_lib` forced to match `//:with_ssl`.",
+    doc = "Re-exports a `cc_library` with `@curl//:ssl_lib` forced to match `@postgres_config//:with_ssl`.",
     attrs = {
         "target": attr.label(
             doc = "The `cc_library` bundling libpq's SSL link inputs (openssl/boringssl + optionally @curl).",

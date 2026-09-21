@@ -1,8 +1,12 @@
 """Module extension that fetches PostgreSQL sources and makes them buildable.
 
     postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
-    postgres.add_version("18.4")
+    postgres.add_version(version = "18.4")
     use_repo(postgres, "postgres_18_4")
+
+Every version shares one `@postgres_config` repository holding the build
+settings, so `--@postgres_config//:with_ssl=boringssl` configures all of them
+at once instead of needing the flag repeated per version.
 
 Each version becomes its own repository holding the upstream tarball with a
 BUILD file and, for releases that need them, pre-generated sources overlaid on
@@ -10,6 +14,7 @@ top. See templates/README.md for why those are checked in.
 """
 
 load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+load(":config_repo.bzl", "postgres_config_repo")
 load(":versions.bzl", "VERSIONS")
 
 def _default_repo_name(version):
@@ -31,7 +36,10 @@ def _overlay(module_ctx, template):
     return files
 
 def _postgres_impl(module_ctx):
-    created = []
+    # One shared settings repo for every version: with_ssl and friends are
+    # build-wide choices, not per-release ones.
+    postgres_config_repo(name = "postgres_config")
+    created = ["postgres_config"]
     for module in module_ctx.modules:
         for tag in module.tags.add_version:
             name = tag.repo_name or _default_repo_name(tag.version)
