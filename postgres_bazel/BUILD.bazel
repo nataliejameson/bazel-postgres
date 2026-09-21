@@ -1,6 +1,5 @@
 # This module ships build logic, not sources: extension.bzl fetches each
-# PostgreSQL release and overlays templates/<version>/ onto it.
-exports_files([
-    "dist.bzl",
-    "smoke_test.sh",
-])
+# PostgreSQL release and overlays templates/<version>/files/ onto it. The
+# starlark those overlays load (dist.bzl, private/) lives in the overlay too,
+# because it resolves labels like //:with_ssl against the generated repo.
+exports_files(["smoke_test.sh"])
