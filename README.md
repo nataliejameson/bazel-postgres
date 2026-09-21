@@ -7,7 +7,8 @@ integration tests can start a real database instead of relying on a system
 install.
 
 Each release becomes its own repository, so a project can depend on several at
-once.
+once. PostgreSQL 16.2 through 18.4 are supported — see `postgres_bazel/versions.bzl`
+for the list.
 
 ## Usage
 
@@ -70,8 +71,12 @@ does.
 ## Adding a version
 
 See `postgres_bazel/templates/README.md`. In short: add it to `versions.bzl`,
-run `scripts/distprep.sh <version>`, copy and adjust the overlay, add a smoke
-test.
+run `scripts/distprep.sh <version>`, and add a smoke test. A new *major*
+version additionally needs its own `templates/major/<n>/BUILD.bazel`; the
+three majors differ more than you would expect, which that file explains.
+
+The generated sources are committed, so building needs only Bazel — perl,
+bison and flex are for `distprep.sh` alone.
 
 ## Build configuration
 

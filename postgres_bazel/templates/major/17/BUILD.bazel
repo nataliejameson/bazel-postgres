@@ -265,6 +265,7 @@ _AUTOCONF_FUNCS = macros.AC_CHECK_FUNCS([
     "strerror_r",
     "strlcat",
     "strlcpy",
+    "strchrnul",
     "strnlen",
     "strsep",
     "strsignal",
@@ -276,6 +277,11 @@ _AUTOCONF_FUNCS = macros.AC_CHECK_FUNCS([
 ])
 
 _AUTOCONF_DECLS = [
+    checks.AC_CHECK_DECL(
+        "strchrnul",
+        define = "HAVE_DECL_STRCHRNUL",
+        includes = ["#include <string.h>"],
+    ),
     checks.AC_CHECK_DECL(
         "fdatasync",
         define = "HAVE_DECL_FDATASYNC",
