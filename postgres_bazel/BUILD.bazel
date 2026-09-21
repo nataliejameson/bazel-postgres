@@ -1661,18 +1661,18 @@ cc_binary(
 # be safe to execute everywhere.
 cc_library(
     name = "pgport_crc32c",
+    # pg_crc32c_sb8.c is the runtime fallback and already comes from
+    # _LIBPORT_BASE_SRCS; listing it again here would define its symbols twice.
     srcs = select({
         ":_x86_64_gcc_like": [
             "src/port/pg_crc32c_sse42.c",
             "src/port/pg_crc32c_sse42_choose.c",
-            "src/port/pg_crc32c_sb8.c",
         ],
         "@platforms//cpu:arm64": [
             "src/port/pg_crc32c_armv8.c",
             "src/port/pg_crc32c_armv8_choose.c",
-            "src/port/pg_crc32c_sb8.c",
         ],
-        "//conditions:default": ["src/port/pg_crc32c_sb8.c"],
+        "//conditions:default": [],
     }),
     copts = select({
         "@platforms//cpu:arm64": ["-march=armv8-a+crc"],

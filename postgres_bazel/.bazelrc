@@ -1,7 +1,10 @@
-# Bazel's C++ autodetection picks whatever `ld64.lld` is first on PATH. On this
-# machine that is LLD 16 from a nix profile, which segfaults linking the
-# rules_cc_autoconf host tools (and Bazel also emits GNU --start-lib, which
-# Apple's ld rejects). Keep nix off the toolchain-detection PATH so we get
-# Xcode's clang and ld.
-build --repo_env=PATH=/Users/natalie.jameson/bin:/Users/natalie.jameson/local/discord/.local/bin:/opt/homebrew/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/iTerm.app/Contents/Resources/utilities:/Users/natalie.jameson/.local/bin:/Users/natalie.jameson/local/discord/ai_plugins/discord/buildkite/bin:/Users/natalie.jameson/local/discord/ai_plugins/discord/datadog/bin
-build --action_env=PATH=/Users/natalie.jameson/bin:/Users/natalie.jameson/local/discord/.local/bin:/opt/homebrew/bin:/usr/local/bin:/System/Cryptexes/App/usr/bin:/usr/bin:/bin:/usr/sbin:/sbin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/local/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/bin:/var/run/com.apple.security.cryptexd/codex.system/bootstrap/usr/appleinternal/bin:/pkg/env/global/bin:/Library/Apple/usr/bin:/Applications/iTerm.app/Contents/Resources/utilities:/Users/natalie.jameson/.local/bin:/Users/natalie.jameson/local/discord/ai_plugins/discord/buildkite/bin:/Users/natalie.jameson/local/discord/ai_plugins/discord/datadog/bin
+# Keep this file free of host-specific toolchain overrides: as a module, the
+# cc toolchain (and its linker) is the consumer's to choose.
+#
+# If your machine has an ld64.lld on PATH that rules_cc detects but that can't
+# handle --start-lib (LLD 16 from a nix profile segfaults on it in Mach-O
+# mode), put the workaround in .bazelrc.user, which is gitignored:
+#
+#   build --features=-supports_start_end_lib
+#   build --host_features=-supports_start_end_lib
+try-import %workspace%/.bazelrc.user
