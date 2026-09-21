@@ -1,29 +1,75 @@
 #!/bin/bash
-# Run the PostgreSQL code generators against an extracted source tree.
+# Generate the sources a PostgreSQL release needs but does not ship, and stage
+# them under postgres_bazel/templates/<version>/generated/.
 #
-# PG18 dropped `make distprep`, so the release tarball no longer ships the
-# perl/bison/flex outputs that 16.x did. This reproduces them in-tree, at the
-# paths the build expects, and writes the list of produced files to
-# generated.manifest at the tree root.
+# Postgres 18 dropped `make distprep` when upstream moved to meson, so its
+# tarballs no longer carry the perl/bison/flex output that 16.x did. Rather
+# than run those tools on every build, we run them once here and commit the
+# result. That is safe because the output is platform-neutral: the values that
+# vary by target are left as literal tokens for initdb to rewrite at runtime
+# (FLOAT8PASSBYVAL and friends, see genbki.pl) or as C identifiers the target
+# compiler resolves.
 #
-# Usage: distprep.sh <path-to-extracted-postgresql-source>
+# Usage: scripts/distprep.sh <version>          # e.g. 18.4
+#
+# Re-run this for a single release whenever you add or refresh one; it doesn't
+# touch any other version.
 
 set -euo pipefail
 
-SRC=${1:?usage: distprep.sh <postgres-source-dir>}
+VERSION=${1:-}
+if [ -z "$VERSION" ]; then
+    echo >&2 "usage: $(basename "$0") <version>    e.g. $(basename "$0") 18.4"
+    exit 1
+fi
+
+REPO_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+MODULE="${REPO_ROOT}/postgres_bazel"
+VERSIONS_BZL="${MODULE}/versions.bzl"
+DEST="${MODULE}/templates/${VERSION}"
+
+for tool in perl bison flex curl shasum; do
+    command -v "$tool" >/dev/null || { echo >&2 "error: $tool is required"; exit 1; }
+done
+
+# Pull the pinned url/sha256 straight out of versions.bzl so the two can't drift.
+read -r URL SHA256 < <(python3 - "$VERSIONS_BZL" "$VERSION" <<'PY'
+import re, sys
+src, want = open(sys.argv[1]).read(), sys.argv[2]
+m = re.search(r'"%s":\s*_pg\(\s*"(\d+)",\s*"(\d+)",\s*"([0-9a-f]{64})"' % re.escape(want), src)
+if not m:
+    sys.exit("version %s is not listed in versions.bzl" % want)
+major, minor, sha = m.groups()
+print("https://ftp.postgresql.org/pub/source/v{0}.{1}/postgresql-{0}.{1}.tar.gz".format(major, minor), sha)
+PY
+)
+
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
+echo >&2 "Downloading postgresql-${VERSION}"
+curl -fsSL -o "$WORK/pg.tar.gz" "$URL"
+ACTUAL=$(shasum -a 256 "$WORK/pg.tar.gz" | awk '{print $1}')
+if [ "$ACTUAL" != "$SHA256" ]; then
+    echo >&2 "error: sha256 mismatch for ${VERSION}"
+    echo >&2 "  versions.bzl says ${SHA256}"
+    echo >&2 "  download is       ${ACTUAL}"
+    exit 1
+fi
+
+tar xzf "$WORK/pg.tar.gz" -C "$WORK"
+SRC="$WORK/postgresql-${VERSION}"
 cd "$SRC"
 
-PG_MAJOR=$(sed -n 's/^AC_INIT(\[PostgreSQL\], \[\([0-9]*\)\..*/\1/p' configure.ac)
-: "${PG_MAJOR:?could not determine major version from configure.ac}"
-
-MANIFEST="${SRC}/generated.manifest"
+PG_MAJOR=${VERSION%%.*}
+MANIFEST="$WORK/generated.manifest"
 : > "$MANIFEST"
 record() { for f in "$@"; do [ -e "$f" ] && echo "$f" >> "$MANIFEST"; done; }
 
-# Ordered header lists. Order is significant: genbki relies on bootstrap
-# catalogs coming first, and gen_node_support warns that reordering node
-# headers risks ABI breakage. Both lists are read from upstream's own build
-# files so they stay correct across version bumps.
+# Ordered header lists, read from upstream's own build files so they stay
+# right across version bumps. Order matters: genbki needs the bootstrap
+# catalogs first, and gen_node_support warns that reordering node headers
+# risks ABI breakage.
 catalog_headers=$(sed -n '/^catalog_headers = \[/,/^\]/p' src/include/catalog/meson.build \
     | grep -oE "pg_[a-z_0-9]+\.h" | sed 's|^|src/include/catalog/|')
 node_headers=$(sed -n '/^node_headers = /,/^$/p' src/backend/nodes/Makefile \
@@ -65,8 +111,8 @@ echo >&2 "  generate-wait_event_types.pl"
 perl src/backend/utils/activity/generate-wait_event_types.pl \
     --outdir src/backend/utils/activity --code \
     src/backend/utils/activity/wait_event_names.txt >/dev/null
-# wait_event_types.h, and the two .c files that wait_event.c and
-# wait_event_funcs.c #include as "utils/...", all belong under src/include.
+# wait_event.c and wait_event_funcs.c #include the two .c files as "utils/...",
+# so they belong under src/include too.
 cp src/backend/utils/activity/wait_event_types.h \
    src/backend/utils/activity/pgstat_wait_event.c \
    src/backend/utils/activity/wait_event_funcs_data.c \
@@ -84,8 +130,8 @@ perl src/backend/storage/lmgr/generate-lwlocknames.pl \
     src/include/storage/lwlocklist.h src/backend/utils/activity/wait_event_names.txt >/dev/null
 record src/include/storage/lwlocknames.h
 
-# Gen_dummy_probes.pl is a sed-style script, so it needs perl -n. This stands in
-# for dtrace, which we don't build against.
+# Gen_dummy_probes.pl is a sed-style script, hence perl -n. It stands in for
+# dtrace, which we don't build against.
 echo >&2 "  Gen_dummy_probes.pl"
 perl -n src/backend/utils/Gen_dummy_probes.pl src/backend/utils/probes.d \
     > src/include/utils/probes.h
@@ -105,7 +151,7 @@ record src/bin/psql/sql_help.c src/bin/psql/sql_help.h src/bin/psql/tab-complete
 
 # plpgsql is a loadable module, but initdb's bootstrap does CREATE EXTENSION
 # plpgsql, so the server can't finish initialising without it.
-echo >&2 "  plpgsql keyword lists"
+echo >&2 "  plpgsql"
 perl src/tools/gen_keywordlist.pl --varname ReservedPLKeywords --output src/pl/plpgsql/src \
     src/pl/plpgsql/src/pl_reserved_kwlist.h
 perl src/tools/gen_keywordlist.pl --varname UnreservedPLKeywords --output src/pl/plpgsql/src \
@@ -115,7 +161,7 @@ perl src/pl/plpgsql/src/generate-plerrcodes.pl src/backend/utils/errcodes.txt \
 record src/pl/plpgsql/src/pl_reserved_kwlist_d.h src/pl/plpgsql/src/pl_unreserved_kwlist_d.h \
        src/pl/plpgsql/src/plerrcodes.h
 
-# bison: every grammar takes -d so the matching .h is emitted next to the .c.
+# bison: every grammar takes -d so the matching .h lands next to the .c.
 echo >&2 "  bison"
 for y in src/backend/parser/gram \
          src/backend/bootstrap/bootparse \
@@ -141,4 +187,25 @@ flex_gen "-Cfe -p -p" src/fe_utils/psqlscan
 flex_gen "-Cfe -p -p" src/bin/psql/psqlscanslash
 
 sort -u "$MANIFEST" -o "$MANIFEST"
-echo >&2 "  generated $(wc -l < "$MANIFEST" | tr -d ' ') files"
+
+# Stage into templates/<version>/files/, which mirrors the archive layout.
+# The hand-written overlay in there (BUILD.bazel, dist.bzl, private/) is not
+# ours to touch, so only the generated paths are replaced.
+mkdir -p "${DEST}/files"
+while read -r f; do
+    mkdir -p "${DEST}/files/$(dirname "$f")"
+    cp "$f" "${DEST}/files/$f"
+done < "$MANIFEST"
+
+if [ ! -f "${DEST}/files/BUILD.bazel" ]; then
+    echo >&2
+    echo >&2 "note: ${DEST}/files/BUILD.bazel does not exist yet. Copy the overlay"
+    echo >&2 "      (BUILD.bazel, dist.bzl, private/) from another release of the"
+    echo >&2 "      same major version and adjust it."
+fi
+
+# extension.bzl reads this to know what to symlink over the tarball.
+(cd "${DEST}/files" && find . -type f | sed 's|^\./||' | sort) > "${DEST}/files.manifest"
+
+echo >&2 "Wrote $(wc -l < "$MANIFEST" | tr -d ' ') generated files;" \
+         "templates/${VERSION}/files.manifest now lists $(wc -l < "${DEST}/files.manifest" | tr -d ' ')."

@@ -1,38 +1,73 @@
-# Postgres-bazel
+# postgres-bazel
 
-Simple Bazel module that builds postgresql with Bazel for consumption by other tools that require libpq. This is mostly based off of https://registry-preview.bazel.build/modules/postgres, however with some slight changes in how it exposes multiple versions and with support for multiple major/minor versions to be defined.
+Builds PostgreSQL from source with Bazel. Unlike the
+[BCR postgres module](https://registry.bazel.build/modules/postgres), which
+stops at libpq, this builds the server and the frontend tools too, so
+integration tests can start a real database instead of relying on a system
+install.
 
-# Configuration
+Each release becomes its own repository, so a project can depend on several at
+once.
 
-In your MODULE.bazel, add:
+## Usage
 
 ```bazel
 bazel_dep(name = "postgres_bazel")
-# local_path_override / git_override / whatever
-# This needs to point to the postgres_bazel subdirectory
+# plus a local_path_override / git_override pointing at the postgres_bazel
+# subdirectory of this repo
 
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
-postgres.version(major = "16", minor = "14")
+postgres.add_version(version = "18.4")
+use_repo(postgres, "postgres_18_4")
 ```
 
-Run `bazel mod tidy` to have it update your `use_repo` usages. Then in your build file, add a dependency with:
+Then depend on what you need:
 
 ```bazel
 cc_library(
-    name = "my_thing_that_needs_pq",
-    ...
-    deps = ["@postgres_16_14//:libpq"],
+    name = "needs_libpq",
+    deps = ["@postgres_18_4//:libpq"],
 )
 ```
 
-# Updating versions
+Targets per version: `libpq`, `psql`, `initdb`, `pg_ctl`, `postgres`, and
+`pg_dist` — a `bin/` + `share/` tree laid out so the binaries are actually
+runnable. That layout matters: `get_share_path()` locates `PGSHAREDIR` by
+walking up from the running executable, and only does so when the binary sits
+in a directory named `bin`.
 
-To update the available versions in versions.bzl, set a new version range in `scripts/update_versions.sh`, and re-run the script. It will download every major and minor combination, get their hashes, and update versions.bzl. It will also update the test suite.
+`add_version` also takes `repo_name` to override the default
+`postgres_<version>`, and `url` + `sha256` (both or neither) to build a
+release that isn't in `versions.bzl`.
 
-# Testing
+## Testing a version
 
-There is a test suite, `scripts/test.sh` that runs on github actions that tests building every version of postgres on linux (arm64 and amd64), and that can easily be invoked locally. It does this by creating a sample repo, and building every single target for every combination of major and minor versions specified in `scripts/update_versions.sh`
+`postgres_smoke_test` initdbs a cluster, starts it, queries it through psql,
+and shuts it down:
 
-# pg_config.h values
+```bazel
+load("@postgres_bazel//:defs.bzl", "postgres_smoke_test")
 
-These were taken directly from the BCR postgres package. They're reasonable, but not hyper optimized, build settings. Feel free to take a look at the templated files if you want to change the pg_config.h values. They are in `templates/<default | version>/<common | platform>/*.h`
+postgres_smoke_test(
+    name = "pg_18_4_smoke_test",
+    dist = "@postgres_18_4//:pg_dist",
+    version = "18.4",
+)
+```
+
+`scripts/test.sh` runs the suite in `postgres_test_builds/`, which is what CI
+does.
+
+## Adding a version
+
+See `postgres_bazel/templates/README.md`. In short: add it to `versions.bzl`,
+run `scripts/distprep.sh <version>`, copy and adjust the overlay, add a smoke
+test.
+
+## Build configuration
+
+The overlay exposes upstream's `--with-*` switches as Bazel flags:
+`--@postgres_18_4//:with_ssl=openssl|boringssl|none`, and boolean
+`with_zlib`, `with_lz4`, `with_zstd`, `with_libcurl`, `with_readline`,
+`with_gssapi`, `enable_cassert`. `pg_config.h` is produced by a real
+`rules_cc_autoconf` probe of upstream's `pg_config.h.in`, not hand-maintained.

@@ -1,30 +1,18 @@
+load("@postgres_bazel//:defs.bzl", "postgres_smoke_test")
 
-alias(name = "postgres_16_2_pq", actual = "@postgres_16_2//:libpq")
-alias(name = "postgres_16_3_pq", actual = "@postgres_16_3//:libpq")
-alias(name = "postgres_16_4_pq", actual = "@postgres_16_4//:libpq")
-alias(name = "postgres_16_5_pq", actual = "@postgres_16_5//:libpq")
-alias(name = "postgres_16_6_pq", actual = "@postgres_16_6//:libpq")
-alias(name = "postgres_16_7_pq", actual = "@postgres_16_7//:libpq")
-alias(name = "postgres_16_8_pq", actual = "@postgres_16_8//:libpq")
-alias(name = "postgres_16_9_pq", actual = "@postgres_16_9//:libpq")
-alias(name = "postgres_16_10_pq", actual = "@postgres_16_10//:libpq")
-alias(name = "postgres_16_11_pq", actual = "@postgres_16_11//:libpq")
-alias(name = "postgres_16_12_pq", actual = "@postgres_16_12//:libpq")
-alias(name = "postgres_16_13_pq", actual = "@postgres_16_13//:libpq")
-alias(name = "postgres_16_14_pq", actual = "@postgres_16_14//:libpq")
-alias(name = "postgres_17_0_pq", actual = "@postgres_17_0//:libpq")
-alias(name = "postgres_17_1_pq", actual = "@postgres_17_1//:libpq")
-alias(name = "postgres_17_2_pq", actual = "@postgres_17_2//:libpq")
-alias(name = "postgres_17_3_pq", actual = "@postgres_17_3//:libpq")
-alias(name = "postgres_17_4_pq", actual = "@postgres_17_4//:libpq")
-alias(name = "postgres_17_5_pq", actual = "@postgres_17_5//:libpq")
-alias(name = "postgres_17_6_pq", actual = "@postgres_17_6//:libpq")
-alias(name = "postgres_17_7_pq", actual = "@postgres_17_7//:libpq")
-alias(name = "postgres_17_8_pq", actual = "@postgres_17_8//:libpq")
-alias(name = "postgres_17_9_pq", actual = "@postgres_17_9//:libpq")
-alias(name = "postgres_17_10_pq", actual = "@postgres_17_10//:libpq")
-alias(name = "postgres_18_0_pq", actual = "@postgres_18_0//:libpq")
-alias(name = "postgres_18_1_pq", actual = "@postgres_18_1//:libpq")
-alias(name = "postgres_18_2_pq", actual = "@postgres_18_2//:libpq")
-alias(name = "postgres_18_3_pq", actual = "@postgres_18_3//:libpq")
-alias(name = "postgres_18_4_pq", actual = "@postgres_18_4//:libpq")
+# One of these per version: initdb a cluster, start it, query it, shut it down.
+postgres_smoke_test(
+    name = "postgres_18_4_smoke_test",
+    dist = "@postgres_18_4//:pg_dist",
+    version = "18.4",
+)
+
+alias(
+    name = "postgres_18_4_psql",
+    actual = "@postgres_18_4//:psql",
+)
+
+alias(
+    name = "postgres_18_4_libpq",
+    actual = "@postgres_18_4//:libpq",
+)

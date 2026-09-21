@@ -1,0 +1,18 @@
+# Per-release overlay trees. extension.bzl symlinks everything under
+# templates/<version>/files/ onto the fetched tarball, preserving relative
+# paths, so files/BUILD.bazel becomes the repo's root BUILD file and
+# files/src/backend/parser/gram.c replaces that path in the archive.
+#
+# These are data, not part of this repo's build, hence exports_files rather
+# than any rule. They are also why templates/ has no subpackages: a
+# BUILD.bazel under templates/18.4/files/ must stay an ordinary file.
+exports_files(
+    glob(
+        [
+            "*/files/**",
+            "*/files.manifest",
+        ],
+        exclude_directories = 1,
+    ),
+    visibility = ["//visibility:public"],
+)

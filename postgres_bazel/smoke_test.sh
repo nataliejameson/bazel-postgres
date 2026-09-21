@@ -1,13 +1,28 @@
 #!/bin/bash
-# initdb a cluster, start it, run a query through psql, shut it down.
+# initdb a cluster, start it, run queries through psql, shut it down.
+#
+# Usage: smoke_test.sh <rlocationpath-of-pg_dist> <expected-version>
 
 set -euo pipefail
 
-DIST=$(cd "$(dirname "${BASH_SOURCE[0]}")/dist" && pwd)
+# --- bazel runfiles bootstrap (canonical snippet) ---
+# shellcheck disable=SC1090,SC1091
+f=bazel_tools/tools/bash/runfiles/runfiles.bash
+source "${RUNFILES_DIR:-/dev/null}/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "${RUNFILES_MANIFEST_FILE:-/dev/null}" | cut -f2- -d' ')" 2>/dev/null || \
+  source "$0.runfiles/$f" 2>/dev/null || \
+  source "$(grep -sm1 "^$f " "$0.runfiles_manifest" | cut -f2- -d' ')" 2>/dev/null || \
+  { echo >&2 "ERROR: cannot find $f"; exit 1; }
+# --- end runfiles bootstrap ---
+
+DIST=$(rlocation "$1")
+EXPECTED_VERSION="$2"
+[ -d "$DIST" ] || { echo "no dist tree at $1"; exit 1; }
+
 PGDATA="${TEST_TMPDIR:-/tmp}/pgdata"
 
-# Not $TEST_TMPDIR: sockaddr_un caps the path at 103 bytes and bazel's
-# runfiles paths blow straight past that.
+# Not under TEST_TMPDIR: sockaddr_un caps the socket path at 103 bytes and
+# bazel's runfiles paths run well past that.
 SOCKDIR=$(mktemp -d /tmp/pgsmoke.XXXXXX)
 trap '"$DIST/bin/pg_ctl" -D "$PGDATA" -m immediate -w stop >/dev/null 2>&1 || true; rm -rf "$SOCKDIR"' EXIT
 
@@ -23,11 +38,11 @@ rm -rf "$PGDATA"
 
 psql() { "$DIST/bin/psql" -h "$SOCKDIR" -p 55432 -U postgres -d postgres -Atc "$1"; }
 
-version=$(psql "select version();")
+version=$(psql "select version()")
 echo "$version"
 case "$version" in
-    "PostgreSQL 18.4"*) ;;
-    *) echo "unexpected version: $version"; exit 1 ;;
+    "PostgreSQL $EXPECTED_VERSION"*) ;;
+    *) echo "expected PostgreSQL $EXPECTED_VERSION, got: $version"; exit 1 ;;
 esac
 
 psql "create table t(i int)" > /dev/null
