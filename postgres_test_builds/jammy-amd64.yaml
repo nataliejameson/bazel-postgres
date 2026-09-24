@@ -1,0 +1,35 @@
+# ubuntu jammy
+version: 1
+
+sources:
+  - channel: jammy universe
+    url: https://archive.ubuntu.com/ubuntu/
+  - channel: jammy main
+    url: https://archive.ubuntu.com/ubuntu/
+  - channel: jammy-updates main
+    url: https://archive.ubuntu.com/ubuntu/
+  - channel: jammy-security main
+    url: https://security.ubuntu.com/ubuntu
+  - channel: llvm-toolchain-jammy-16 main
+    url: https://apt.llvm.org/jammy/
+
+archs:
+  - amd64
+
+packages:
+  - base-files
+  # NOTE: we explicitly want libc6, but also can only depend on it transitively
+  # because explicitly specifiying it creates a dependency cycle.
+  # - libc6
+  - libc6-dev
+  - libc-bin
+  # c++ (llvm)
+  - libgcc-12-dev
+  - libclang-rt-16-dev
+  - libc++-16-dev
+  - libc++abi-16-dev
+  # c++ (gcc)
+  - gcc-12-base
+  - libgomp1
+  - libstdc++6
+  - libstdc++-12-dev

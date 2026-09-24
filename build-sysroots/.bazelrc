@@ -1,0 +1,3 @@
+# See postgres_bazel/.bazelrc: host-specific toolchain overrides belong in
+# .bazelrc.user, which is gitignored.
+try-import %workspace%/.bazelrc.user

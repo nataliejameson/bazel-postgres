@@ -6,6 +6,117 @@ local_path_override(
     path = "../postgres_bazel",
 )
 
+bazel_dep(name = "sysroots")
+local_path_override(
+    module_name = "sysroots",
+    path = "../sysroots",
+)
+
+sysroots = use_extension("@sysroots//:extension.bzl", "sysroots")
+sysroots.sysroot(
+    module_name = "sysroot_linux_arm64",
+    tarball = "@sysroots//:sysroot-linux-arm64.tar",
+)
+sysroots.sysroot(
+    module_name = "sysroot_linux_amd64",
+    tarball = "@sysroots//:sysroot-linux-amd64.tar",
+)
+use_repo(sysroots, "sysroot_linux_amd64", "sysroot_linux_arm64")
+
+bazel_dep(name = "tar.bzl", version = "0.10.9")
+bazel_dep(name = "toolchains_llvm", version = "1.9.1")
+
+llvm = use_extension("@toolchains_llvm//toolchain/extensions:llvm.bzl", "llvm")
+
+_LLVM_TOOLCHAINS = [
+    {
+        "name": "llvm_toolchain",
+        "exec_os": "",
+        "exec_arch": "",
+    },
+    {
+        "name": "llvm_toolchain_exec_aarch64",
+        "exec_os": "linux",
+        "exec_arch": "aarch64",
+    },
+    {
+        "name": "llvm_toolchain_exec_x86_64",
+        "exec_os": "linux",
+        "exec_arch": "x86_64",
+    },
+]
+
+_LLVM_SYSROOTS = [
+    {
+        "target": "linux-aarch64",
+        "label": "@sysroot_linux_arm64//:files",
+    },
+    {
+        "target": "linux-x86_64",
+        "label": "@sysroot_linux_amd64//:files",
+    },
+]
+
+_LLVM_VERSIONS = {
+    "linux-x86_64": "20.1.2",
+    "linux-aarch64": "20.1.2",
+}
+
+_LLVM_SHA256 = {
+    "linux-x86_64": "96506dbe7b7acfa8ee719c668e2af73623018e9312bf60062bffca8f5a7f6c5f",
+    "linux-aarch64": "c80099d630e9e0dee846202d35a5b965ffec7694eb1bf39d965db88dbab30178",
+}
+
+_LLVM_STDLIB = {
+    "linux-x86_64": "stdc++",
+    "linux-aarch64": "stdc++",
+}
+
+_LLVM_STRIP_PREFIX = {
+    "linux-x86_64": "LLVM-20.1.2-Linux-X64",
+    "linux-aarch64": "LLVM-20.1.2-Linux-ARM64",
+}
+
+_LLVM_URLS = {
+}
+
+_llvm_sysroots = [
+    llvm.sysroot(
+        name = toolchain["name"],
+        label = sysroot["label"],
+        targets = [sysroot["target"]],
+    )
+    for toolchain in _LLVM_TOOLCHAINS
+    for sysroot in _LLVM_SYSROOTS
+]
+
+_llvm_toolchains = [
+    llvm.toolchain(
+        name = toolchain["name"],
+        #compile_flags = _LLVM_COMPILE_FLAGS,
+        #cxx_flags = _LLVM_CXX_FLAGS,
+        exec_arch = toolchain["exec_arch"],
+        exec_os = toolchain["exec_os"],
+        llvm_versions = _LLVM_VERSIONS,
+        #opt_compile_flags = _LLVM_OPT_COMPILE_FLAGS,
+        sha256 = _LLVM_SHA256,
+        stdlib = _LLVM_STDLIB,
+        #strip_prefix = _LLVM_STRIP_PREFIX,
+        #urls = _LLVM_URLS,
+    )
+    for toolchain in _LLVM_TOOLCHAINS
+]
+
+#use_repo(llvm, "llvm_toolchain")
+#use_repo(llvm, "llvm_toolchain", "llvm_toolchain_exec_x86_64")
+use_repo(llvm, "llvm_toolchain", "llvm_toolchain_exec_aarch64", "llvm_toolchain_exec_x86_64")
+
+register_toolchains("@llvm_toolchain//:all")
+
+register_toolchains("@llvm_toolchain_exec_aarch64//:all")
+
+register_toolchains("@llvm_toolchain_exec_x86_64//:all")
+
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
 postgres.add_version(version = "16.2")
 postgres.add_version(version = "16.3")
@@ -38,6 +149,11 @@ postgres.add_version(version = "18.3")
 postgres.add_version(version = "18.4")
 use_repo(
     postgres,
+    "postgres_16_10",
+    "postgres_16_11",
+    "postgres_16_12",
+    "postgres_16_13",
+    "postgres_16_14",
     "postgres_16_2",
     "postgres_16_3",
     "postgres_16_4",
@@ -46,13 +162,9 @@ use_repo(
     "postgres_16_7",
     "postgres_16_8",
     "postgres_16_9",
-    "postgres_16_10",
-    "postgres_16_11",
-    "postgres_16_12",
-    "postgres_16_13",
-    "postgres_16_14",
     "postgres_17_0",
     "postgres_17_1",
+    "postgres_17_10",
     "postgres_17_2",
     "postgres_17_3",
     "postgres_17_4",
@@ -61,7 +173,6 @@ use_repo(
     "postgres_17_7",
     "postgres_17_8",
     "postgres_17_9",
-    "postgres_17_10",
     "postgres_18_0",
     "postgres_18_1",
     "postgres_18_2",

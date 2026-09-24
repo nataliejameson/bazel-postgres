@@ -911,7 +911,10 @@ _LIBPORT_BASE_SRCS = [
 # `meson.build` enables these via `replace_funcs_neg`, gated on the HAVE_*
 # autoconf result. We can't easily select on probe-results from srcs, so we
 # pick the canonical set for each platform.
-_LIBPORT_LINUX_SRCS = [
+# timingsafe_bcmp.c was backported in 16.14; earlier releases don't ship it.
+_TIMINGSAFE_BCMP_SRCS = ["src/port/timingsafe_bcmp.c"] if int(PG_MINORVERSION_NUM) >= 14 else []
+
+_LIBPORT_LINUX_SRCS = _TIMINGSAFE_BCMP_SRCS + [
     # glibc has explicit_bzero (>=2.25), getopt(_long), inet_aton, mkdtemp,
     # strnlen, strsep and pthread_barrier_wait. Everything else needs a
     # postgres-supplied replacement.
@@ -919,7 +922,6 @@ _LIBPORT_LINUX_SRCS = [
     "src/port/getpeereid.c",
     "src/port/strlcat.c",
     "src/port/strlcpy.c",
-    "src/port/timingsafe_bcmp.c",
 ]
 
 _LIBPORT_MACOS_SRCS = [
@@ -929,7 +931,7 @@ _LIBPORT_MACOS_SRCS = [
     "src/port/pthread_barrier_wait.c",
 ]
 
-_LIBPORT_WINDOWS_SRCS = [
+_LIBPORT_WINDOWS_SRCS = _TIMINGSAFE_BCMP_SRCS + [
     "src/port/dirent.c",
     "src/port/dirmod.c",
     # MSVC's libc lacks these; postgres ships replacements that meson's
@@ -947,7 +949,6 @@ _LIBPORT_WINDOWS_SRCS = [
     "src/port/open.c",
     "src/port/strlcat.c",
     "src/port/strlcpy.c",
-    "src/port/timingsafe_bcmp.c",
     "src/port/win32common.c",
     "src/port/win32dlopen.c",
     "src/port/win32env.c",
@@ -1473,10 +1474,7 @@ cc_library(
     # pg_crc32c_sb8.c is the runtime fallback and already comes from
     # _LIBPORT_BASE_SRCS; listing it again here would define its symbols twice.
     srcs = select({
-        ":_x86_64_gcc_like": [
-            "src/port/pg_crc32c_sse42.c",
-            "src/port/pg_crc32c_sse42_choose.c",
-        ],
+        ":_x86_64_gcc_like": ["src/port/pg_crc32c_sse42_choose.c"],
         "@platforms//cpu:arm64": [
             "src/port/pg_crc32c_armv8.c",
             "src/port/pg_crc32c_armv8_choose.c",
@@ -1491,17 +1489,33 @@ cc_library(
     # linker sees no direct reference and drops the archive member.
     alwayslink = True,
     local_defines = ["FRONTEND"],
+    deps = [":include"] + select({
+        ":_x86_64_gcc_like": [":_pgport_crc32c_sse42"],
+        "//conditions:default": [],
+    }),
+)
+
+# Upstream's CFLAGS_CRC: before 18 the SSE4.2 intrinsics aren't marked with a
+# target attribute, so this one file needs -msse4.2. It's kept out of the
+# chooser, which has to run on CPUs without SSE4.2.
+cc_library(
+    name = "_pgport_crc32c_sse42",
+    srcs = ["src/port/pg_crc32c_sse42.c"],
+    copts = ["-msse4.2"],
+    alwayslink = True,
+    target_compatible_with = select({
+        ":_x86_64_gcc_like": [],
+        "//conditions:default": ["@platforms//:incompatible"],
+    }),
     deps = [":include"],
 )
+
 cc_library(
     name = "pgport_crc32c_srv",
     # pg_crc32c_sb8.c is the runtime fallback and already comes from
     # _LIBPORT_BASE_SRCS; listing it again here would define its symbols twice.
     srcs = select({
-        ":_x86_64_gcc_like": [
-            "src/port/pg_crc32c_sse42.c",
-            "src/port/pg_crc32c_sse42_choose.c",
-        ],
+        ":_x86_64_gcc_like": ["src/port/pg_crc32c_sse42_choose.c"],
         "@platforms//cpu:arm64": [
             "src/port/pg_crc32c_armv8.c",
             "src/port/pg_crc32c_armv8_choose.c",
@@ -1515,7 +1529,10 @@ cc_library(
     # pg_comp_crc32c is a function pointer reached through a macro, so the
     # linker sees no direct reference and drops the archive member.
     alwayslink = True,
-    deps = [":include"],
+    deps = [":include"] + select({
+        ":_x86_64_gcc_like": [":_pgport_crc32c_sse42"],
+        "//conditions:default": [],
+    }),
 )
 
 # ---------------------------------------------------------------------------
