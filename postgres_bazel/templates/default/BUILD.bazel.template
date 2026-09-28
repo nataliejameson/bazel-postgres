@@ -1,0 +1,25 @@
+# Mirrors the public targets of templates/major/*/BUILD.bazel. Keep in sync by
+# hand when a target is added there.
+
+[
+    alias(
+        name = name,
+        actual = "@{repo}//:" + name,
+        visibility = ["//visibility:public"],
+    )
+    for name in [
+        "initdb",
+        "initdb_bin",
+        "libpq",
+        "pg_ctl",
+        "pg_ctl_bin",
+        "pg_dist",
+        "pgcommon",
+        "pgport",
+        "postgres",
+        "postgres_bin",
+        "pq",
+        "psql",
+        "psql_bin",
+    ]
+]

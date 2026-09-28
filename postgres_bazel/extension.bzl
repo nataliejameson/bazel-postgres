@@ -14,6 +14,7 @@ top. See templates/README.md for why those are checked in.
 """
 
 load(":config_repo.bzl", "postgres_config_repo")
+load(":default_repo.bzl", "postgres_default_repo")
 load(":repo.bzl", "postgres_repo")
 load(":versions.bzl", "VERSIONS")
 
@@ -43,6 +44,7 @@ def _postgres_impl(module_ctx):
     # build-wide choices, not per-release ones.
     postgres_config_repo(name = "postgres_config")
     created = ["postgres_config"]
+    repo_for_version = {}
     for module in module_ctx.modules:
         for tag in module.tags.add_version:
             name = tag.repo_name or _default_repo_name(tag.version)
@@ -72,6 +74,22 @@ def _postgres_impl(module_ctx):
                 version = tag.version,
             )
             created.append(name)
+            repo_for_version.setdefault(tag.version, name)
+
+    for module in module_ctx.modules:
+        for tag in module.tags.default_version:
+            if tag.repo_name in created:
+                fail("postgres: repository {} was already declared".format(tag.repo_name))
+            if tag.version not in repo_for_version:
+                fail("postgres: default_version {} has no matching add_version. Added versions: {}".format(
+                    tag.version,
+                    ", ".join(sorted(repo_for_version)),
+                ))
+            postgres_default_repo(
+                name = tag.repo_name,
+                target_repo = repo_for_version[tag.version],
+            )
+            created.append(tag.repo_name)
 
     return module_ctx.extension_metadata(
         reproducible = True,
@@ -101,6 +119,19 @@ postgres = module_extension(
                 ),
                 "template": attr.string(
                     doc = "Major-version BUILD template to use, e.g. \"18\". Defaults to this release's own major.",
+                ),
+            },
+        ),
+        "default_version": tag_class(
+            doc = "Alias an added version's targets under an unversioned repository name.",
+            attrs = {
+                "version": attr.string(
+                    mandatory = True,
+                    doc = "A version also passed to add_version, e.g. \"18.4\".",
+                ),
+                "repo_name": attr.string(
+                    default = "postgres",
+                    doc = "Repository name for the aliases.",
                 ),
             },
         ),

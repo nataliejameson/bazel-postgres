@@ -15,6 +15,7 @@ exports_files(
         [
             "major/*/BUILD.bazel",
             "major/*/MODULE.bazel.template",
+            "default/BUILD.bazel.template",
             "*/files/**",
             "*/files.manifest",
         ],
