@@ -72,14 +72,6 @@ _LLVM_STDLIB = {
     "linux-aarch64": "stdc++",
 }
 
-_LLVM_STRIP_PREFIX = {
-    "linux-x86_64": "LLVM-20.1.2-Linux-X64",
-    "linux-aarch64": "LLVM-20.1.2-Linux-ARM64",
-}
-
-_LLVM_URLS = {
-}
-
 _llvm_sysroots = [
     llvm.sysroot(
         name = toolchain["name"],
@@ -93,22 +85,15 @@ _llvm_sysroots = [
 _llvm_toolchains = [
     llvm.toolchain(
         name = toolchain["name"],
-        #compile_flags = _LLVM_COMPILE_FLAGS,
-        #cxx_flags = _LLVM_CXX_FLAGS,
         exec_arch = toolchain["exec_arch"],
         exec_os = toolchain["exec_os"],
         llvm_versions = _LLVM_VERSIONS,
-        #opt_compile_flags = _LLVM_OPT_COMPILE_FLAGS,
         sha256 = _LLVM_SHA256,
         stdlib = _LLVM_STDLIB,
-        #strip_prefix = _LLVM_STRIP_PREFIX,
-        #urls = _LLVM_URLS,
     )
     for toolchain in _LLVM_TOOLCHAINS
 ]
 
-#use_repo(llvm, "llvm_toolchain")
-#use_repo(llvm, "llvm_toolchain", "llvm_toolchain_exec_x86_64")
 use_repo(llvm, "llvm_toolchain", "llvm_toolchain_exec_aarch64", "llvm_toolchain_exec_x86_64")
 
 register_toolchains("@llvm_toolchain//:all")

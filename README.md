@@ -1,25 +1,30 @@
-# postgres-bazel
+# Postgres On Bazel
 
-Builds PostgreSQL from source with Bazel. Unlike the
-[BCR postgres module](https://registry.bazel.build/modules/postgres), which
-stops at libpq, this builds the server and the frontend tools too, so
-integration tests can start a real database instead of relying on a system
-install.
+Builds PostgreSQL from source with Bazel.
 
-Each release becomes its own repository, so a project can depend on several at
-once. PostgreSQL 16.2 through 18.4 are supported — see `postgres_bazel/versions.bzl`
-for the list.
+Differences from the [BCR postgres module](https://registry.bazel.build/modules/postgres):
+
+- Multiple postgres versions can be configured concurrently, rather than relying on a single BCR version
+- Builds the server and frontend tools in addition to `libpq`.
+
+**beep boop** this is mostly robot generated. PRs making this more human friendly are welcome.
 
 ## Usage
 
 ```bazel
 bazel_dep(name = "postgres_bazel")
-# plus a local_path_override / git_override pointing at the postgres_bazel
-# subdirectory of this repo
+git_override(
+    module_name = "postgres_bazel",
+    commit = "<commit>",
+    remote = "https://github.com/nataliejameson/bazel-postgres.git",
+    strip_prefix = "postgres_bazel",
+)
 
 postgres = use_extension("@postgres_bazel//:extension.bzl", "postgres")
+postgres.add_version(repo_name = "postgres_17", version = "17.4")
 postgres.add_version(version = "18.4")
-use_repo(postgres, "postgres_18_4", "postgres_config")
+postgres.default_version(repo_name = "my_postgres", version = "17.4")
+use_repo(postgres, "my_postgres", "postgres_17", "postgres_18_4", "postgres_config")
 ```
 
 Then depend on what you need:
@@ -31,26 +36,40 @@ cc_library(
 )
 ```
 
-Targets per version: `libpq`, and a `<name>_bin` wrapper for each of `psql`,
-`initdb`, `pg_ctl` and `postgres`:
+### Available Versions
 
-```sh
-bazel run @postgres_18_4//:psql_bin -- --version
-```
+By default there are a number of postgres 16, 17, and 18 minor revisions available. See [versions.bzl](./postgres_bazel/versions.bzl) for a complete list.
 
-The wrappers carry the installation tree as runfiles and exec the right
-binary out of it, so they work as `bazel run` targets, as tools, or in a
-test's `data` — no `$(location ...)/bin/psql` plumbing. The tree itself is
-`pg_dist` if you need it directly; its `bin/` + `share/` layout matters,
-because `get_share_path()` locates `PGSHAREDIR` by walking up from the
-running executable and only does so when the binary sits in a directory
-named `bin`.
+### Available Targets
 
-`add_version` also takes `repo_name` to override the default
-`postgres_<version>`, and `url` + `sha256` (both or neither) to build a
-release that isn't in `versions.bzl`.
+Libraries:
 
-## Testing a version
+* `libpq`
+
+Binaries:
+
+* `psql`
+* `initdb`
+* `pg_ctl`
+* `postgres`
+
+For using each of these binaries as tools or via `bazel run`, use the `_bin` suffixed version of each of those targets. They pull all dependent files in as runfiles, ensure that postgres has its expected path layout, and executes the binary in the right bazel configuration.
+
+### Extension API
+
+`add_version`:
+  * `repo_name`: The name of the repo to export. Defaults to `postgres_<major>_<minor>`
+  * `version`: The version to use. Unless `url` + `sha256` are specified, this must be present in `postgres_bazel/versions.bzl`
+  * `url`: The url to postgres source for this version. Requires `sha256` if set.
+  * `sha256`: The hash of the file at `url`. Invalid if `url` is not specified.
+  * `template`: The major version BUILD template to use.
+
+`default_version`:
+  * `repo_name`: The name of the repo to export. Defaults to `postgres`
+  * `version`: The version to alias to. This must be specified in an `add_version()` call.
+
+
+### Testing a version
 
 `postgres_smoke_test` initdbs a cluster, starts it, queries it through psql,
 and shuts it down:
@@ -65,33 +84,37 @@ postgres_smoke_test(
 )
 ```
 
-`scripts/test.sh` runs the suite in `postgres_test_builds/`, which is what CI
-does.
+To run a full integration test like CI does, run `./scripts/test.sh` from the repository root. It will build every version in versions.bzl for you and verify that it works.
 
 ## Adding a version
 
-See `postgres_bazel/templates/README.md`. In short: add it to `versions.bzl`,
-run `scripts/distprep.sh <version>`, and add a smoke test. A new *major*
-version additionally needs its own `templates/major/<n>/BUILD.bazel`; the
-three majors differ more than you would expect, which that file explains.
+For new minor versions, run `./scripts/add_version.py <major> <minor> <sha256>` where sha256 is the hash of the postgres source tarball.
 
-The generated sources are committed, so building needs only Bazel — perl,
-bison and flex are for `distprep.sh` alone.
+For new major versions, you will also need to create a `postgres_bazel/templates/major/<major>/BUILD.bazel` and `postgres_bazel/templates/major/<major>/MODULE.bazel.template` file.
+
+Note that this will add some generated files from the postgres source tree to the repository because distprep needs to be run for each minor revision.
+
+`postgres_bazel/templates/README.md` has more details about what actually happens here, and what the differences are that had to be accounted for each major version.
 
 ## Build configuration
 
-Upstream's `--with-*` switches are Bazel flags, and they live in one shared
-`@postgres_config` repository rather than per version, so a project building
-several releases configures them once:
+Upstream's `--with-*` switches are available as Bazel flags, and they live in one shared `@postgres_config` repository rather than per version, so a project building several releases configures them once.
 
-```sh
-bazel build --@postgres_config//:with_ssl=boringssl //...
-```
+Available bazel flags are:
 
-`with_ssl` takes `openssl` (default), `boringssl` or `none`; `with_zlib`,
-`with_lz4`, `with_zstd`, `with_libcurl`, `with_readline`, `with_gssapi` and
-`enable_cassert` are booleans; `with_pgport`, `with_blocksize`,
-`with_wal_blocksize` and `with_segsize` take values.
+* `--@postgres_config//:enable_cassert`: bool (default false)
+* `--@postgres_config//:gssapi_lib`: label (default system gssapi)
+* `--@postgres_config//:with_blocksize`: int (default 8): One of 2^{0..5}
+* `--@postgres_config//:with_gssapi`: bool (default false)
+* `--@postgres_config//:with_krb_srvnam`: string (default postgres)
+* `--@postgres_config//:with_libcurl`: bool (default false)
+* `--@postgres_config//:with_lz4`: bool (default false)
+* `--@postgres_config//:with_pgport`: int (default 5432)
+* `--@postgres_config//:with_readline`: bool (default false)
+* `--@postgres_config//:with_segsize`: int (default 1)
+* `--@postgres_config//:with_ssl`: One of `openssl` (default), `boringssl`, or `none`
+* `--@postgres_config//:with_wal_blocksize`: int (default 8). One of 2^{0..6}.
+* `--@postgres_config//:with_zlib`: bool (default false)
+* `--@postgres_config//:with_zstd`: bool (default false)
 
-`pg_config.h` comes from a real `rules_cc_autoconf` probe of upstream's
-`pg_config.h.in`, not a hand-maintained header.
+`pg_config.h` comes from a real `rules_cc_autoconf` probe of upstream's `pg_config.h.in`, not a hand-maintained header. See the `:autoconf_probes` target in each postgres version's root.
